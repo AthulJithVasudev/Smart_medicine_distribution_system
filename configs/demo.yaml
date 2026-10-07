@@ -1,0 +1,48 @@
+profile: demo
+seed: 42
+data_dir: "data/demo"
+mlflow_tracking_uri: "sqlite:///mlflow.db"
+
+hospitals:
+  count: 30
+  ratio_phc: 0.5
+  ratio_taluk: 0.3
+  ratio_district: 0.2
+  rural_ratio: 0.6
+
+medicines:
+  count: 60
+  categories:
+    - Analgesic
+    - Antibiotic
+    - Antimalarial
+    - Antipyretic
+    - IV Fluid
+    - Antihistamine
+    - Antidiabetic
+    - Cardiovascular
+    - Respiratory
+    - Gastrointestinal
+
+simulation:
+  history_days: 180
+  scenario_days: 30
+  reorder_cycle_days: 7
+  base_lead_time_days: 7
+  safety_stock_days: 7
+
+observation:
+  reporting_delay_prob: 0.15
+  max_delay_days: 3
+  missing_record_prob: 0.05
+  duplicate_record_prob: 0.02
+  unit_error_prob: 0.01
+  noise_std: 0.05
+
+optimizer:
+  horizon_days: 14
+  safety_stock_factor: 1.2
+  fixed_transport_cost: 120.0
+  cost_per_km: 2.8
+  max_transit_days: 3
+  fefo_tie_breaker_weight: 0.001

@@ -1,0 +1,75 @@
+name: Scheduled Cloud Pipeline
+
+on:
+  schedule:
+    # Run every Sunday at 03:00 UTC
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Execution Profile (dev, demo, full)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - demo
+          - full
+      seeds:
+        description: "Number of Random Seeds per Scenario-Policy"
+        required: true
+        default: "3"
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-pipeline.txt
+
+      - name: Stage 1 - Prepare Data & PySpark ETL
+        run: |
+          python -m pipeline.prepare --profile ${{ inputs.profile || 'dev' }}
+
+      - name: Stage 2 - Train Models & Baselines
+        run: |
+          python -m pipeline.train --profile ${{ inputs.profile || 'dev' }}
+
+      - name: Stage 3 - Execute Closed-Loop Scenario Matrix
+        run: |
+          python -m pipeline.run_scenario --scenario all --policy all --profile ${{ inputs.profile || 'dev' }} --seeds ${{ inputs.seeds || '3' }}
+
+      - name: Stage 4 - Export & Publish Serving Parquet
+        run: |
+          python -m pipeline.export --profile ${{ inputs.profile || 'dev' }} --target-dir data/serving
+
+      - name: Upload Serving Data Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: serving-data
+          path: data/serving/
+          retention-days: 14
+
+      - name: Upload MLflow & Model Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-and-metrics
+          path: data/${{ inputs.profile || 'dev' }}/models/
+          retention-days: 14

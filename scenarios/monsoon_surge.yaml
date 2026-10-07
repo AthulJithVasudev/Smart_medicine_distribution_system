@@ -1,0 +1,9 @@
+name: monsoon_surge
+type: seen
+description: "Monsoon surge with elevated fever, water-borne gastrointestinal cases, and increased IV fluid consumption."
+outbreak_multiplier: 1.3
+is_monsoon: true
+supplier_delay_days: 1
+initial_stock_ratio: 1.0
+rural_transit_multiplier: 1.2
+outbreak_window: [1, 30]

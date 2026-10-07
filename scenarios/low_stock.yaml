@@ -1,0 +1,9 @@
+name: low_stock
+type: seen
+description: "Initial network inventory constrained to 30% of normal baseline levels at simulation start."
+outbreak_multiplier: 1.0
+is_monsoon: false
+supplier_delay_days: 0
+initial_stock_ratio: 0.3
+rural_transit_multiplier: 1.0
+outbreak_window: [0, 0]

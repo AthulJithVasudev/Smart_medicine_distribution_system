@@ -1,0 +1,69 @@
+"""Unit and integration tests for Phase 8: Streamlit serving presentation layer."""
+import ast
+from pathlib import Path
+import pytest
+import pandas as pd
+
+from app.data_loader import load_serving_table, load_all_dashboard_data
+
+
+def test_all_serving_parquet_tables_readable():
+    """Verify load_all_dashboard_data loads all 12 published serving tables."""
+    data = load_all_dashboard_data()
+    expected_tables = [
+        "scenario_catalog",
+        "hospitals",
+        "medicines",
+        "state_daily",
+        "transfers",
+        "kpis_daily",
+        "replay",
+        "evaluation_forecasting",
+        "evaluation_classification",
+        "evaluation_anomaly",
+        "evaluation_optimizer",
+        "runs",
+    ]
+    for tbl in expected_tables:
+        assert tbl in data, f"Table {tbl} not in loaded dashboard data"
+        assert isinstance(data[tbl], pd.DataFrame), f"{tbl} is not a DataFrame"
+        assert not data[tbl].empty, f"{tbl} should not be empty in published data"
+
+
+def test_no_spark_or_model_training_in_dashboard_code():
+    """
+    CRITICAL ARCHITECTURE REQUIREMENT:
+    The Streamlit app is purely a presentation layer. It MUST NOT:
+    - import or start PySpark
+    - train ML models or call .fit()
+    - run heavy simulation steps
+    """
+    app_files = list(Path("app").rglob("*.py"))
+    assert len(app_files) >= 6, "Expected at least 6 python files in app directory"
+
+    forbidden_tokens = ["pyspark", "SparkSession", "Simulator.run", ".fit("]
+
+    for f_path in app_files:
+        content = f_path.read_text(encoding="utf-8")
+        # Parse AST to ensure valid python syntax
+        ast.parse(content)
+
+        for token in forbidden_tokens:
+            assert token not in content, f"Forbidden heavy compute token '{token}' found in {f_path}! App must be pure presentation."
+
+
+def test_missing_serving_data_graceful_fallback(tmp_path, monkeypatch):
+    """Verify that if serving tables are absent, data_loader returns empty DataFrame rather than crashing."""
+    monkeypatch.setattr("app.data_loader.SERVING_DIR", tmp_path / "non_existent_dir")
+    res = load_serving_table("non_existent_table")
+    assert isinstance(res, pd.DataFrame)
+    assert res.empty
+
+
+def test_no_hardcoded_kpis_in_home():
+    """Verify that KPIs in Home.py are derived dynamically from loaded DataFrame data."""
+    home_content = Path("app/Home.py").read_text(encoding="utf-8")
+    # Verify dynamic expressions exist
+    assert 'day_state["stock_remaining"].sum()' in home_content
+    assert 'day_state["unmet_demand"].sum()' in home_content
+    assert 'day_state["expired_units"].sum()' in home_content
