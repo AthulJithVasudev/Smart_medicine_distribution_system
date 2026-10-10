@@ -1,0 +1,38 @@
+# Python Caches & Virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Scratch & Temp Directories
+scratch/
+.system_generated/
+*.log
+
+# MLflow Local Database
+mlflow.db
+mlflow.db-journal
+mlruns/
+.trash/
+
+# PySpark Metastore & Temp Data
+metastore_db/
+derby.log
+warehouse/
+spark-warehouse/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+
+# Dev Pipeline Intermediate Run Data
+data/dev/
