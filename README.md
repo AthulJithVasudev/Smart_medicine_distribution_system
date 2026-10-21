@@ -1,288 +1,178 @@
 # Smart Medicine Redistribution System for Government Hospitals
 
-> **System Architecture v4: Cloud-Hosted, Scenario-Driven Multi-Facility Inventory Optimization**  
-> *Academic Data Mining, Data Analysis, and Big Data Research Implementation*
+[![CI Status](https://github.com/AthulJithVasudev/Smart_medicine_distribution_system/actions/workflows/ci.yml/badge.svg)](https://github.com/AthulJithVasudev/Smart_medicine_distribution_system/actions)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
+
+> **An end-to-end data mining, demand forecasting, and MILP optimization platform that eliminates hospital drug stockouts and minimizes medicine expiry wastage across public healthcare networks.**
 
 ---
 
-## ⚠️ Academic & Synthetic Data Disclaimer
+### 🌐 Live Demo & Interface Preview
 
-All hospital facilities, patient demand records, inventory levels, Out-Patient Department (OPD) visit counts, and batch identifiers in this system are **SYNTHETIC DATA** generated reproducibly from fixed random seeds by the daily time-stepped simulation engine. These values are produced strictly for academic simulation, mathematical optimization benchmarks, and research evaluation. They do **not** represent real, official government hospital statistics. Data provenance is tracked across all records (`SIMULATED`, `DERIVED`, `OFFICIAL`).
+- **Live Streamlit App:** `<LIVE_APP_URL>` *(Instant access powered by bundled sample serving data)*
+- **Dashboard Preview:**
 
----
-
-## 1. Project Overview & Business Problem
-
-Public healthcare networks across geographical regions (Primary Health Centres, Taluk Hospitals, District Medical Colleges) frequently suffer from severe inventory misalignments:
-
-- **Facility A** holds excess stock of essential medicines (e.g. antibiotics, antipyretics, IV fluids) approaching expiration dates, incurring substantial financial write-offs.
-- **Facility B** (frequently a peripheral or rural health clinic) experiences unanticipated demand surges (e.g. during monsoon seasons or dengue epidemics) and faces imminent stockouts.
-
-The **Smart Medicine Redistribution System** solves this operational challenge by operating a closed-loop data intelligence pipeline:
-$$\text{Observe} \longrightarrow \text{ETL} \longrightarrow \text{Forecast} \longrightarrow \text{Optimize} \longrightarrow \text{Apply Transfers} \longrightarrow \text{Next Day}$$
-The system decides **whether, when, which batch, how much, and from where to transfer** medicines to eliminate stockouts and minimize wastage while respecting transit times and shelf-life feasibility.
-
----
-
-## 2. Logical Architecture Diagram
-
-```
-                        ┌─────────────────────────────────────────┐
-                        │       STATEFUL DAILY TIME-STEPPED       │
-                        │             SIMULATOR                   │
-                        └────────────────────┬────────────────────┘
-                                             │ Raw Observations (Censored & Noisy)
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          RAW PARQUET TABLES             │
-                        │       (Partitioned by report_day)       │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │            PYSPARK ETL                  │
-                        │  (Deduplication, Window Lags, Rolling)  │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          CURATED PARQUET TABLES         │
-                        │    (Strict Historical Information at t) │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          DUCKDB SQL ANALYTICS           │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          ML & FORECASTING               │
-                        │  - SARIMAX Dedicated Models (High-Vol)  │
-                        │  - Global Gradient Boosting (Long-Tail) │
-                        │  - Random Forest Risk Classifier        │
-                        │  - Unsupervised Isolation Forest        │
-                        │  - Hospital K-Means Clustering          │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │     EVALUATION & MLFLOW TRACKING        │
-                        │  - Walk-Forward Cross Validation        │
-                        │  - Champion / Challenger Registry       │
-                        │  - Oracle Ground-Truth Bounds           │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │      OR-TOOLS ILP REDISTRIBUTION        │
-                        │  - Mandatory Receiving Cap              │
-                        │  - Batch Stock Limits                   │
-                        │  - Expiry & Timing Feasibility          │
-                        │  - Soft FEFO Tie-Breaker ($\epsilon$)   │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │        PUBLISHED SERVING PARQUET        │
-                        │       (12 Compact Serving Tables)       │
-                        └────────────────────┬────────────────────┘
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │      STREAMLIT EXECUTIVE DASHBOARD      │
-                        │    (Zero-Compute Serving / UI Layer)    │
-                        └─────────────────────────────────────────┘
+```text
++-------------------------------------------------------------------------------------------------------+
+|  SMART MEDICINE REDISTRIBUTION SYSTEM  |  Role: [ Government Health Officer v ]   [ Guided Tour (5) ] |
++-------------------------------------------------------------------------------------------------------+
+|  [!] What Needs Attention Now        |  [->] What Should Be Done             |  [#] What It Achieves  |
+|  - Imminent Stockouts: 3 hospitals   |  - Transfer: H02 -> H05 (Amoxicillin) |  - Wastage Saved: 100% |
+|  - Expiring Batches: 5 batches       |  - Transfer: H01 -> H08 (Paracetamol) |  - Fill Rate: 99.2%    |
+|  - Critical Shortage Alert: High     |  - [Download Transfer Orders (CSV)]   |  - Cost: Rs. 1,08,622  |
++-------------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 3. Technology Stack
+## ⚡ Quick Start in Three Commands
 
-- **Language & Runtime**: Python 3.12 / 3.14
-- **Distributed ETL**: PySpark local-mode (`spark.sql.shuffle.partitions` = 8)
-- **Analytical Storage**: Apache Parquet (Snappy-compressed), DuckDB
-- **Forecasting & ML**: statsmodels (SARIMAX), Scikit-Learn (HistGradientBoosting, RandomForest, KMeans, IsolationForest)
-- **Mathematical Optimization**: Google OR-Tools (`pywraplp` Mixed Integer Linear Programming)
-- **Experiment Tracking**: Local MLflow with SQLite backend
-- **Serving & UI**: Streamlit, Plotly Express & Graph Objects, Mapbox Geospatial
-- **Workflow Automation**: GitHub Actions CI/CD pipelines (Ubuntu runners, Java 17, Python 3.12)
-
----
-
-## 4. Repository Structure
-
-```
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                 # Automated testing on PR and push
-│       └── pipeline.yml           # Scheduled weekly pipeline execution
-├── app/
-│   ├── Home.py                    # State Health Department Command Center
-│   ├── data_loader.py             # Cached Parquet serving reader
-│   └── pages/
-│       ├── 1_Hospital_Administrator.py   # Facility inventory & transfer orders
-│       ├── 2_Scenario_Comparison.py      # Cross-policy benchmark & stress testing
-│       ├── 3_Replay.py                   # Forecast verification vs realized demand
-│       ├── 4_Model_Evaluation.py         # Metrics, baselines, and ablation suite
-│       └── 5_About.py                    # Architecture, methodology, disclaimer
-├── configs/
-│   ├── dev.yaml                   # 10 hospitals, 30 medicines, 14-day horizon
-│   ├── demo.yaml                  # 30 hospitals, 60 medicines, 30-day horizon
-│   └── full.yaml                  # 50 hospitals, 200 medicines, 3-year history
-├── pipeline/
-│   ├── simulator/                 # Stateful discrete-event engine & entities
-│   │   ├── entities.py
-│   │   ├── demand.py
-│   │   ├── supply.py
-│   │   ├── observation.py
-│   │   └── engine.py
-│   ├── etl/                       # PySpark & DuckDB ETL pipeline
-│   │   ├── storage.py
-│   │   ├── cleaning.py
-│   │   ├── features.py
-│   │   ├── spark_etl.py
-│   │   └── pipeline.py
-│   ├── models/                    # ML forecasting, classification, clustering
-│   │   ├── forecasting.py
-│   │   ├── clustering.py
-│   │   ├── classification.py
-│   │   ├── anomaly.py
-│   │   └── leakage.py
-│   ├── optimizer/                 # OR-Tools MILP optimizer
-│   │   ├── solver.py
-│   │   └── rolling.py
-│   ├── evaluation/                # Metrics, baselines, walk-forward, MLflow
-│   │   ├── metrics.py
-│   │   ├── baselines.py
-│   │   ├── validation.py
-│   │   └── tracking.py
-│   ├── utils/
-│   │   └── scenario_loader.py
-│   ├── prepare.py                 # Historical data generation & ETL CLI
-│   ├── train.py                   # Model training & baseline evaluation CLI
-│   ├── run_scenario.py            # Closed-loop scenario matrix CLI
-│   └── export.py                  # Serving Parquet publisher CLI
-├── scenarios/
-│   ├── normal.yaml                # Baseline conditions
-│   ├── monsoon_surge.yaml         # Seasonal fever & gastro surge
-│   ├── dengue_2x.yaml             # 2x fever outbreak
-│   ├── dengue_4x.yaml             # 4x severe epidemic (unseen distribution shift)
-│   ├── supplier_delay.yaml        # +10 day supply chain disruption (unseen)
-│   ├── low_stock.yaml             # 30% initial inventory constraint
-│   └── rural_access.yaml          # 2x transit duration on rural roads (unseen)
-├── tests/
-│   ├── test_simulator.py
-│   ├── test_etl.py
-│   ├── test_evaluation.py
-│   ├── test_models.py
-│   ├── test_leakage.py
-│   ├── test_optimizer.py
-│   ├── test_scenarios.py
-│   ├── test_pipeline_and_publishing.py
-│   ├── test_streamlit_app.py
-│   └── test_integration.py
-├── requirements.txt
-├── requirements-pipeline.txt
-└── pyproject.toml
-```
-
----
-
-## 5. Development Profiles
-
-| Profile | Hospitals | Medicines | History Window | Scenario Horizon | Primary Purpose |
-|---|---|---|---|---|---|
-| **DEV** | 10 | 30 | 30 days | 14 days | Rapid local development & test suite execution |
-| **DEMO** | 30 | 60 | 180 days | 30 days | High-fidelity university demonstration |
-| **FULL** | 50 | 200 | 1,095 days (3 yrs) | 60 days | Large-scale empirical research experiments |
-
----
-
-## 6. Execution Commands
-
-### 1. Installation
+### Option A: Instant Dashboard (Zero Pipeline Run)
+Clone and launch immediately with the bundled, precomputed sample dataset:
 ```powershell
-pip install -r requirements-pipeline.txt
-```
-
-### 2. Run Test Suite
-```powershell
-pytest -ra
-```
-
-### 3. Stage 1: Data Preparation & ETL
-```powershell
-python -m pipeline.prepare --profile dev
-```
-
-### 4. Stage 2: Train ML Models & Log to MLflow
-```powershell
-python -m pipeline.train --profile dev
-```
-
-### 5. Stage 3: Closed-Loop Scenario Matrix
-```powershell
-python -m pipeline.run_scenario --scenario normal --policy optimizer --profile dev --seeds 3
-```
-
-To run all scenarios across all policies:
-```powershell
-python -m pipeline.run_scenario --scenario all --policy all --profile dev --seeds 3
-```
-
-### 6. Stage 4: Publish Serving Tables
-```powershell
-python -m pipeline.export --profile dev --target-dir data/serving
-```
-
-### 7. Launch Streamlit Executive Dashboard
-```powershell
+git clone https://github.com/AthulJithVasudev/Smart_medicine_distribution_system.git
+cd Smart_medicine_distribution_system
+pip install -r requirements.txt
 streamlit run app/Home.py
 ```
 
----
+### Option B: One-Command Full Pipeline Run & Launch
+To verify your environment, execute the end-to-end data pipeline, and launch the dashboard:
 
-## 7. Mathematical Optimization Formulation
+**Windows (PowerShell):**
+```powershell
+.\run_demo.ps1
+```
 
-The redistribution optimizer is formulated as a Mixed-Integer Linear Program (MILP) solved using Google OR-Tools (`pywraplp` CBC/SCIP):
-
-$$\min \sum_{i,j,m,b} c^{\text{trans}}_{ij} x_{ijmb} + \sum_{j,m} c^{\text{short}}_{jm} u_{jm} + \sum_{i,m,b} \gamma V_m w_{imb} + \sum_{i,j,m,b} \epsilon (\text{exp}_b - t) x_{ijmb}$$
-
-Subject to:
-1. **Source Transferable Surplus Limit**:
-   $$\sum_{j,b} x_{ijmb} \le \text{avail}_{im} \quad \forall i, m$$
-2. **Individual Batch Stock Limit**:
-   $$\sum_{j} x_{ijmb} \le \text{stock}_{imb} \quad \forall i, m, b$$
-3. **Shortage Demand Balance**:
-   $$\sum_{i,b} x_{ijmb} + u_{jm} \ge \text{need}_{jm} \quad \forall j, m$$
-4. **Mandatory Destination Receiving Cap**:
-   $$\sum_{i,b} x_{ijmb} \le \text{need}_{jm} \quad \forall j, m$$
-   *(inflow is capped at the forecast need, so surplus is not pushed onto receiving hospitals (forecast error can still leave some excess)).*
-5. **Expiry Wastage Reduction Penalty**:
-   $$w_{imb} + \sum_{j} x_{ijmb} \ge \text{at\_risk}_{imb} \quad \forall i, m, b \quad (w_{imb} \ge 0)$$
-   where $\text{at\_risk}_{imb}$ is computed pre-solve via FEFO allocation of forecast demand.
-6. **Shelf-Life & Transit Timing Feasibility**:
-   $$x_{ijmb} = 0 \quad \text{if } \text{exp}_b - (t + \tau_{ij}) < \text{min\_shelf\_life} \quad \text{or} \quad \tau_{ij} > \text{horizon}$$
-7. **Soft FEFO Tie-Breaker**:
-   $$\epsilon \cdot (\text{exp}_b - t)$$ breaks ties toward earlier-expiring batches (soft FEFO) when transport costs are identical.
+**Linux / macOS (Bash):**
+```bash
+chmod +x run_demo.sh
+./run_demo.sh
+```
 
 ---
 
-## 8. Verification & Test Suite
+## 🎯 What You Can Do in the Dashboard
 
-[![CI Status](https://github.com/AthulJithVasudev/Smart_medicine_distribution_system/actions/workflows/ci.yml/badge.svg)](https://github.com/AthulJithVasudev/Smart_medicine_distribution_system/actions)
+1. **Take Immediate Action:** View top critical shortages and expiring batches on the Home page, review recommended inter-hospital transfers with plain-language justifications, and download actionable transfer manifests as CSV.
+2. **Empower Facility Administrators:** Switch to the Hospital Administrator view to inspect local inventory health, view 14-day forecasts with 95% uncertainty bands, and track incoming deliveries.
+3. **Stress-Test Public Health Scenarios:** Benchmark **Smart Plan** (MILP) against **Nearest Surplus** (Greedy) and **Do Nothing** across 7 real-world scenarios (monsoon surges, 4x dengue epidemic, supply disruptions).
+4. **Audit Historical Accuracy:** In the Replay tab, travel back in time to audit what the model predicted on any past date against realized patient demand.
+5. **Verify Rigorous Model Metrics:** Review quantitative verdicts on Model Evaluation (WAPE error reduction, stockout classification recall, OPD feature ablation, and theoretical Oracle bounds).
 
-All 71 automated tests across all test suites run cleanly:
-- `test_cli_and_doctor.py`: System Doctor diagnostics, environment checks, and CLI subcommands.
-- `test_simulator.py`: FEFO consumption, reproducible random streams, batch lifecycles, and demand censoring.
-- `test_etl.py`: Partitioned Parquet, deduplication, missing values, unit corrections, DuckDB queries, temporal lag causality, and ETL_BACKEND fallback.
-- `test_evaluation.py`: Naive baselines, walk-forward splits, Oracle evaluation, and MLflow logging.
-- `test_models.py`: Dedicated SARIMAX, global tree regressors, hospital K-Means clustering, and forward-outcome Random Forest risk classification.
-- `test_leakage.py`: 7-point leakage audit, label-shuffle tests, and unsupervised Isolation Forest verification.
-- `test_optimizer.py`: Receiving cap adherence, source limits, expiry feasibility, wastage reduction, and FEFO tie-break selection.
-- `test_scenarios.py`: Closed-loop feedback, seen vs unseen stress tests, replay data schemas, and multi-seed spread.
-- `test_pipeline_and_publishing.py`: End-to-end execution of prepare, train, scenario matrix, and serving export.
-- `test_streamlit_app.py`: Serving Parquet readability, zero-compute presentation rules, bundled sample fallback, and DuckDB projection.
-- `test_integration.py`: End-to-end clean pipeline execution.
+---
 
+## 🏗️ System Architecture
+
+The system operates a closed-loop intelligence architecture with strict separation between heavy offline compute (PySpark/DuckDB ETL, LightGBM, OR-Tools MILP) and lightweight online presentation (Streamlit querying Parquet via DuckDB):
+
+```mermaid
+graph TD
+    subgraph Data Generation & Simulation
+        SIM[Daily Time-Stepped Simulator<br/>Multi-facility, OPD demand, Batch-level expiries] --> RAW[(Raw Parquet Tables<br/>data/raw/)]
+    end
+
+    subgraph ETL Layer
+        RAW --> ETL{ETL Engine<br/>PySpark Local / DuckDB Fallback}
+        ETL --> CUR[(Curated Parquet Tables<br/>data/curated/)]
+    end
+
+    subgraph Machine Learning & Tracking
+        CUR --> ML_FC[Demand Forecaster<br/>LightGBM + Prophet + Baselines]
+        CUR --> ML_CL[Risk Classifier<br/>Stockout & Surge Predictor]
+        CUR --> ML_KM[Hospital Clustering<br/>K-Means on OPD & Beds]
+        ML_FC --> MLF[(MLflow Tracking<br/>sqlite:///mlflow.db)]
+        ML_CL --> MLF
+    end
+
+    subgraph Mathematical Optimization
+        CUR --> OPT[OR-Tools MILP Optimizer<br/>Multi-hospital, Multi-batch, FEFO]
+        ML_FC -.->|Predicted Needs| OPT
+        OPT --> SCEN[Scenario Evaluation Matrix<br/>Optimizer vs Greedy vs Do-Nothing]
+    end
+
+    subgraph Serving & Zero-Compute UI
+        SCEN --> EXP[Serving Exporter]
+        EXP --> SRV[(Serving Parquet Lake<br/>data/serving/ or data/sample/)]
+        SRV --> DUCK[DuckDB In-Memory Engine]
+        DUCK --> ST[Streamlit Presentation Dashboard<br/>app/Home.py]
+    end
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technologies | Purpose |
+| :--- | :--- | :--- |
+| **Language & Environment** | Python 3.12 (compatible 3.14), PowerShell, Bash | Core runtime and automated runner scripts |
+| **Distributed & Local ETL** | Apache Spark (PySpark 3.5), DuckDB 1.x, PyArrow | Ingestion, temporal window features, zero-JVM fallback |
+| **Predictive Modeling** | LightGBM, Statsmodels (SARIMAX), Scikit-Learn | Demand forecasting, stockout classification, K-Means clustering |
+| **Mathematical Optimization** | Google OR-Tools (`pywraplp` CBC/SCIP MILP) | Constrained multi-facility batch-level redistribution |
+| **Experiment Tracking** | MLflow with SQLite backend (`mlflow.db`) | Hyperparameters, metric tracking, model registry |
+| **Analytical Serving & UI** | Streamlit, Plotly, DuckDB, OpenStreetMap | Interactive, zero-compute executive dashboard |
+| **Testing & CI/CD** | Pytest, GitHub Actions (Ubuntu, Java 17, Python 3.12) | Automated test suite (74+ tests) and workflow automation |
+
+---
+
+## ⚙️ Execution Commands
+
+### Primary One-Command Tools
+```powershell
+# Environment diagnostic & system check
+python -m pipeline doctor
+
+# Complete demo pipeline (prepare -> train -> scenarios -> export)
+python -m pipeline demo --profile dev --seeds 1
+
+# Launch the Streamlit dashboard
+python -m pipeline app
+```
+
+### Advanced Stage-by-Stage Commands
+For research experiments or fine-grained parameter tuning:
+```powershell
+# 1. Historical Data Generation & PySpark/DuckDB ETL
+python -m pipeline prepare --profile dev
+
+# 2. Train Demand Forecasters, Classifiers, and log to MLflow
+python -m pipeline train --profile dev
+
+# 3. Closed-Loop Scenario Matrix Evaluation
+python -m pipeline run_scenario --scenario normal --policy optimizer --profile dev --seeds 1
+python -m pipeline run_scenario --scenario all --policy all --profile dev --seeds 3
+
+# 4. Export Analytical Serving Parquet Tables
+python -m pipeline export --profile dev --target-dir data/serving
+
+# 5. Execute Full Test Suite
+pytest -ra
+```
+
+---
+
+## ⚠️ Academic Disclaimer & Limitations
+
+### Data Disclaimer
+All hospital facilities, patient prescription records, inventory levels, Out-Patient Department (OPD) visits, and batch codes are **SYNTHETIC DATA** generated reproducibly from fixed random seeds by the daily time-stepped simulation engine for academic research. All records carry provenance tags (`SIMULATED`, `DERIVED`, `OFFICIAL`).
+
+### System Limitations
+1. **Simulation Calibrations:** Patient demand and epidemic dynamics depend on synthetic epidemiological distributions; real-world deployment requires integration with state HMIS/e-Aushadhi systems.
+2. **Cost Parameters:** Penalty multipliers for critical drug shortages and transport costs per kilometer are representative assumptions calibrated to public health literature.
+3. **Distributed vs. Local Spark:** PySpark executes in local mode for reproducible single-machine evaluation; it demonstrates API correctness rather than multi-node cluster speedup.
+4. **Zero-Compute Serving:** The Streamlit dashboard visualizes precomputed batch pipeline runs and does not perform active online retraining.
+
+---
+
+## 📚 Detailed Documentation
+
+Detailed architectural, mathematical, operational, and presentation guides are available in the [`docs/`](docs/) directory:
+
+- 📐 [**Architecture & Mathematical Formulation**](docs/ARCHITECTURE.md) - Full MILP model, objective terms, constraints, and component interactions.
+- 📖 [**User & Navigation Guide**](docs/USER_GUIDE.md) - Page-by-page walkthrough, role views, status badge conventions, and guided tour steps.
+- 💻 [**Developer & Contributor Guide**](docs/DEVELOPER.md) - Codebase structure, CLI subcommands, adding scenarios, and Streamlit Cloud deployment.
+- 🔧 [**Troubleshooting Guide**](docs/TROUBLESHOOTING.md) - Resolving Java/JVM missing, Windows winutils, port conflicts, and environment variables.
+- 📊 [**Data Dictionary**](docs/DATA_DICTIONARY.md) - Auto-generated column definitions and schemas for all 12 serving Parquet tables.
+- 🎓 [**Viva Presentation & Demo Script**](docs/DEMO_SCRIPT.md) - 5-minute examination demo script and answers to 6 tough viva questions.
+- 🔬 [**Claims-to-Evidence Matrix**](docs/CLAIMS_TO_EVIDENCE.md) - Direct mapping of every research claim to empirical metrics and passing unit tests.
