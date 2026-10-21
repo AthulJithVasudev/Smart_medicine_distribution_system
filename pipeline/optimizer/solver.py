@@ -45,12 +45,14 @@ class RedistributionOptimizer:
         horizon_days: int = 14,
         fefo_epsilon: float = 0.001,
         min_destination_shelf_life: int = 7,
+        wastage_penalty_weight: float = 5.0,
     ):
         self.fixed_transport_cost = fixed_transport_cost
         self.cost_per_km = cost_per_km
         self.horizon_days = horizon_days
         self.fefo_epsilon = fefo_epsilon
         self.min_shelf_life = min_destination_shelf_life
+        self.wastage_penalty_weight = wastage_penalty_weight
 
     def solve(
         self,
@@ -98,11 +100,36 @@ class RedistributionOptimizer:
                 deficit = max(0, horizon_demand + safety_stock - current_stock)
                 need[key] = deficit
 
+        # 1b. Precalculate expected local consumption under FEFO to identify at-risk expiring batches
+        at_risk_units: Dict[str, int] = {}
+        for h_id in hospitals:
+            for m_id in medicines:
+                hosp_batches = sorted(
+                    [
+                        b for b in batches.values()
+                        if b.hospital_id == h_id and b.medicine_id == m_id and b.is_valid and b.current_quantity > 0 and b.expiry_day > current_day
+                    ],
+                    key=lambda b: b.expiry_day,
+                )
+                est_daily = predicted_demand.get((h_id, m_id), 1.0)
+                local_consumption_horizon = int(est_daily * self.horizon_days)
+                rem_demand = local_consumption_horizon
+                for b in hosp_batches:
+                    cons = min(b.current_quantity, rem_demand)
+                    rem_demand = max(0, rem_demand - cons)
+                    # If batch expires within horizon window and has units that will not be consumed locally
+                    if b.expiry_day <= current_day + self.horizon_days + safety_stock_days:
+                        unconsumed = max(0, b.current_quantity - cons)
+                        if unconsumed > 0:
+                            at_risk_units[b.batch_id] = unconsumed
+
         # 2. Decision Variables
         # x[i, j, m, b]: integer transfer units from source i to dest j of medicine m and batch b
         x_vars: Dict[Tuple[str, str, str, str], pywraplp.Variable] = {}
         # u[j, m]: unmet shortage at hospital j
         u_vars: Dict[Tuple[str, str], pywraplp.Variable] = {}
+        # w[i, m, b]: units left to expire unused
+        w_vars: Dict[str, pywraplp.Variable] = {}
 
         objective = solver.Objective()
         objective.SetMinimization()
@@ -116,6 +143,14 @@ class RedistributionOptimizer:
                 rural_weight = 1.5 if dst_hosp.is_rural else 1.0
                 shortage_cost = med.price * med.criticality * rural_weight * 100.0
                 objective.SetCoefficient(u_var, shortage_cost)
+
+        for b_id, at_risk_qty in at_risk_units.items():
+            b = batches[b_id]
+            med = medicines[b.medicine_id]
+            w_var = solver.IntVar(0, at_risk_qty, f"w_{b.hospital_id}_{b.medicine_id}_{b_id}")
+            w_vars[b_id] = w_var
+            # Wastage penalty term in objective: gamma * V[m] * w[i,m,b]
+            objective.SetCoefficient(w_var, self.wastage_penalty_weight * med.price)
 
         for i_id, src_hosp in hospitals.items():
             for j_id, dst_hosp in hospitals.items():
@@ -203,6 +238,20 @@ class RedistributionOptimizer:
                 ]
                 if dest_in:
                     solver.Add(solver.Sum(dest_in) <= need[(j_id, m_id)])
+
+        # C5: Wastage Penalty Constraint
+        # w[i, m, b] >= at_risk - Sum_j x[i, j, m, b]
+        for b_id, w_var in w_vars.items():
+            batch_out = [
+                x_var for (si, dj, sm, sb), x_var in x_vars.items()
+                if sb == b_id
+            ]
+            at_risk = at_risk_units[b_id]
+            if batch_out:
+                solver.Add(w_var + solver.Sum(batch_out) >= at_risk)
+            else:
+                solver.Add(w_var >= at_risk)
+
 
         # 4. Solve Problem
         solver_status = solver.Solve()

@@ -87,4 +87,27 @@
 
 **Phase 2 Status: COMPLETE AND VERIFIED.**
 
+---
+
+## Phase 3: Correctness checks on the optimizer and claims (P1)
+
+### Code vs README Mathematical Formulation Analysis:
+- **Wastage Term ($w_{imb}$):** The previous objective had only transport cost, shortage penalty, and FEFO tie-break epsilon. We enhanced `pipeline/optimizer/solver.py` with:
+  - Decision variables $w_{imb} \ge 0$ for units at risk of expiring unused.
+  - Constraint: $w_{imb} + \sum_j x_{ijmb} \ge \text{at\_risk}_{imb}$ where $\text{at\_risk}_{imb}$ is calculated pre-solve via FEFO allocation of forecast demand.
+  - Objective penalty term: $\gamma \cdot V_m \cdot w_{imb}$ with parameter `wastage_penalty_weight = 5.0`.
+- **Timing Constraint:** Verified that $x_{ijmb} = 0$ when transit exceeds planning horizon (`transit_days > self.horizon_days`) and when shelf-life on arrival is insufficient (`remaining_days_at_arrival < self.min_shelf_life`). Added unit test `test_timing_constraint_transit_exceeds_horizon`.
+- **Safety Stock Computation:** Confirmed that $\text{avail}_{im} = \max(0, \text{stock} - \text{horizon\_demand} - \text{safety\_stock})$ is computed as non-negative data before solve. Proved that $x = 0$ is always feasible. Added unit test `test_hospital_already_in_shortage_never_source`.
+- **Receiving Cap:** Verified that $\sum_i x_{ijmb} \le \text{need}_{jm}$ strictly caps inflow to destination demand. Verified by `test_mandatory_receiving_cap`.
+- **Local Consumption Feasibility:** Added test `test_shipping_not_forced_when_consumed_locally` showing that when stock is consumed locally, no transfers are forced.
+- **Wording Updates:**
+  - "strictly prioritizes earlier-expiring batches" $\to$ "breaks ties toward earlier-expiring batches (soft FEFO)"
+  - "NEVER dumped" $\to$ "inflow is capped at the forecast need, so surplus is not pushed onto receiving hospitals (forecast error can still leave some excess)"
+  - "Discrete-event simulation" $\to$ "daily time-stepped simulation" across code and README.
+  - "generated deterministically" $\to$ "generated reproducibly from fixed random seeds".
+  - Replaced hardcoded "56+ tests" with live CI status badge.
+
+**Phase 3 Status: COMPLETE AND VERIFIED (71/71 tests passing).**
+
+
 

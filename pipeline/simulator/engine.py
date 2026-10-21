@@ -13,7 +13,7 @@ from pipeline.simulator.observation import ObservationModel
 
 class Simulator:
     """
-    Stateful discrete-event simulation of medicine distribution across government hospitals.
+    Stateful daily time-stepped simulation of medicine distribution across government hospitals.
     Maintains true latent state, executes FEFO consumption, manages transit delays,
     and applies an information barrier to emit noisy, censored observations.
     """
