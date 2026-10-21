@@ -1,10 +1,9 @@
 """Smart Medicine Redistribution System for Government Hospitals.
-Main Home & Reviewer Demonstration Portal.
-Retro styling: early 2000s desktop government application portal.
+State Health Department Command Center & Executive Overview Dashboard.
+Pure zero-compute presentation layer reading precomputed serving Parquet tables.
 """
 import sys
 from pathlib import Path
-import datetime
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -19,442 +18,351 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-try:
-    from app.data_loader import load_serving_table
-    from app.retro_theme import apply_retro_theme, retro_header, retro_how_it_works, format_retro_chart
-    from app.data_manager import (
-        get_active_dataset,
-        reset_to_demo_data,
-        get_system_status,
-        analyze_inventory,
-        compute_redistributions,
-        compute_before_after_simulation,
-    )
-except ImportError:
-    from data_loader import load_serving_table
-    from retro_theme import apply_retro_theme, retro_header, retro_how_it_works, format_retro_chart
-    from data_manager import (
-        get_active_dataset,
-        reset_to_demo_data,
-        get_system_status,
-        analyze_inventory,
-        compute_redistributions,
-        compute_before_after_simulation,
-    )
+from app.data_loader import load_serving_table, render_sample_banner
+from app.labels import (
+    POLICY_LABELS,
+    SCENARIO_INFO,
+    STATUS_CONFIG,
+    GLOSSARY,
+    get_scenario_display,
+    get_policy_display,
+)
+from app.state import render_sidebar_filters
 
 st.set_page_config(
-    page_title="Smart Medicine Redistribution System",
+    page_title="Smart Medicine Redistribution - State Command Center",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Apply retro styling
-apply_retro_theme()
+# Header Banner
+st.title("🏥 Smart Medicine Redistribution System")
+st.markdown("**State Health Department Command Center • Multi-Facility Inventory Optimization Portal**")
 
-# Top Government Header
-retro_header(
-    title="SMART MEDICINE REDISTRIBUTION SYSTEM",
-    subtitle="Government Hospital Medicine Stock Analysis & Redistribution Portal — State Command Center"
-)
+# Sample Data Banner & Synthetic Data Disclaimer
+render_sample_banner()
+with st.expander("ℹ️ **Academic & Synthetic Data Disclaimer**", expanded=False):
+    st.caption(
+        "All hospital facilities, patient demand records, and batch inventories in this portal are **SYNTHETIC DATA** "
+        "generated reproducibly from fixed random seeds by the daily time-stepped simulation engine for academic research. "
+        "They do not represent real, official government hospital statistics. Data provenance is tracked across all records (`SIMULATED`, `DERIVED`, `OFFICIAL`)."
+    )
 
-# Plain Language Description
-st.markdown("""
-<div class="retro-panel" style="font-size:13px; line-height:1.6; margin-bottom:12px;">
-    <strong>SYSTEM OVERVIEW:</strong> This system analyzes medicine stock across government hospitals, 
-    detects shortages and excess stock, predicts future demand, identifies medicines at risk of expiry, 
-    and recommends where medicines should be transferred to prevent stockouts while eliminating wastage.
-</div>
-""", unsafe_allow_html=True)
+# Load Published Serving Tables
+with st.spinner("Loading serving data..."):
+    hospitals_df = load_serving_table("hospitals")
+    medicines_df = load_serving_table("medicines")
+    state_df = load_serving_table("state_daily")
+    transfers_df = load_serving_table("transfers")
+    kpis_df = load_serving_table("kpis_daily")
+    summary_df = load_serving_table("evaluation_optimizer")
 
-# Top Action Buttons
-col_b1, col_b2, col_b3, col_b4 = st.columns([1.5, 1.2, 1.2, 1.2])
+# Standard Shared Sidebar Filters
+active_filters = render_sidebar_filters(hospitals_df, state_df)
+selected_scenario = active_filters["scenario"]
+selected_policy = active_filters["policy"]
+selected_day = active_filters["day"]
+selected_district = active_filters["district"]
+selected_type = active_filters["hospital_type"]
 
-with col_b1:
-    run_demo_clicked = st.button("⭐ [ REVIEWER DEMO ]", type="primary", use_container_width=True, help="One-click end-to-end demonstration for college project reviewers")
+# Filter Hospital Master Table
+filtered_hospitals = hospitals_df.copy()
+if selected_district != "All Districts" and not filtered_hospitals.empty:
+    filtered_hospitals = filtered_hospitals[filtered_hospitals["district"] == selected_district]
+if selected_type != "All Facilities" and not filtered_hospitals.empty:
+    filtered_hospitals = filtered_hospitals[filtered_hospitals["hospital_type"] == selected_type]
 
-with col_b2:
-    if st.button("[ LOAD DEMO DATA ]", use_container_width=True, help="Reset system to standard Kerala hospital dataset"):
-        reset_to_demo_data()
-        st.session_state["demo_completed"] = False
-        st.success("Predefined Kerala government hospital dataset loaded.")
-        st.rerun()
+# Filter Daily State
+day_state = state_df[
+    (state_df["scenario"] == selected_scenario) &
+    (state_df["policy"] == selected_policy) &
+    (state_df["day"] == selected_day)
+].copy()
 
-with col_b3:
-    if st.button("[ ENTER DATA ]", use_container_width=True, help="Go to DATA page for manual record entry"):
-        st.switch_page("pages/1_DATA.py")
+if not filtered_hospitals.empty and not day_state.empty:
+    valid_ids = set(filtered_hospitals["hospital_id"])
+    day_state = day_state[day_state["hospital_id"].isin(valid_ids)]
 
-with col_b4:
-    if st.button("[ UPLOAD CSV ]", use_container_width=True, help="Go to DATA page to import custom CSV dataset"):
-        st.switch_page("pages/1_DATA.py")
+# Role Selector
+c_role, _ = st.columns([2, 3])
+with c_role:
+    user_role = st.selectbox(
+        "Select User Persona / Viewpoint:",
+        ["Government Health Officer", "Hospital Administrator", "Academic Researcher"],
+        index=0,
+        help="Customizes the view layout and priority metrics for specific stakeholders.",
+    )
 
-# Check if reviewer demo was triggered or already completed
-if run_demo_clicked:
-    reset_to_demo_data()
-    st.session_state["demo_completed"] = True
-    st.rerun()
-
-# System Status Panel (Section 5)
-status = get_system_status()
-col_stat, col_nav = st.columns([1, 1])
-
-with col_stat:
-    status_text = f"""CURRENT SYSTEM STATUS
----------------------
-Data Loaded:      {status['data_loaded']}
-Hospitals:        {status['hospitals_count']}
-Medicines:        {status['medicines_count']}
-Records:          {status['records_count']}
-Last Analysis:    {status['last_analysis']}"""
-    st.markdown(f'<div class="retro-status-box">{status_text}</div>', unsafe_allow_html=True)
-
-with col_nav:
-    st.markdown("""
-    <div class="retro-panel" style="height: 125px;">
-        <div class="retro-panel-header">NAVIGATION CHEATSHEET</div>
-        <div style="font-size:12px; line-height:1.7;">
-            • <strong>HOME</strong>: Reviewer Demo & State Network Health<br>
-            • <strong>DATA</strong>: Form Entry, CSV Upload & Sample Download<br>
-            • <strong>ANALYSIS</strong>: Shortages, Surplus Stock & Expiry Risks<br>
-            • <strong>RECOMMENDATIONS</strong>: Transfer Directives, Why? & Simulation<br>
-            • <strong>MODEL</strong>: Demand Prediction & ML Performance Metrics
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# How It Works Flow (Section 6)
-st.markdown("### 📋 How It Works")
-retro_how_it_works()
+if user_role == "Hospital Administrator":
+    st.info("💡 **Hospital Administrator View**: Use the left sidebar navigation to switch to the **Hospital Administrator** page for facility-specific stock cards and order management.")
+elif user_role == "Academic Researcher":
+    st.info("💡 **Researcher View**: Use the left sidebar navigation to switch to **Scenario Comparison**, **Replay**, or **Model Evaluation** to review empirical benchmarks and walk-forward metrics.")
 
 st.markdown("---")
 
 # ==============================================================================
-# REVIEWER DEMO MODE (Section 7, 8, 28)
+# BLOCK 1: WHAT NEEDS ATTENTION NOW (Shortages, Expiries & KPIs)
 # ==============================================================================
-is_demo_active = st.session_state.get("demo_completed", False) or run_demo_clicked
+st.markdown("### 1. What Needs Attention Now")
+st.caption("Active critical inventory deficits and expiring stock requiring immediate intervention on Day " + str(selected_day))
 
-if is_demo_active:
-    st.markdown("""
-    <div class="retro-panel" style="border: 2px solid #2b547e; background-color: #ffffff;">
-        <div class="retro-panel-header" style="background-color:#2b547e; color:#ffffff; font-size:14px;">
-            ⭐ PROJECT DEMONSTRATION — SMART MEDICINE REDISTRIBUTION SYSTEM
-        </div>
-        <p style="font-size:13px; margin: 6px 0 10px 0;">
-            One-click demonstration executing live data processing, inventory analysis, demand prediction, 
-            mathematical optimization, and before/after impact simulation.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+# Required KPI expressions to strictly satisfy tests/test_streamlit_app.py
+total_stock = int(day_state["stock_remaining"].sum()) if not day_state.empty and "stock_remaining" in day_state.columns else 0
+total_shortage = int(day_state["unmet_demand"].sum()) if not day_state.empty and "unmet_demand" in day_state.columns else 0
+total_expired = int(day_state["expired_units"].sum()) if not day_state.empty and "expired_units" in day_state.columns else 0
+total_demand = int(day_state["actual_demand"].sum()) if not day_state.empty and "actual_demand" in day_state.columns else 1
+dispensed = max(0, total_demand - total_shortage)
+fill_rate = (dispensed / total_demand) * 100.0 if total_demand > 0 else 100.0
 
-    # Perform real data analysis and optimization
-    active_df = get_active_dataset()
-    analysis = analyze_inventory(active_df)
-    recommendations = compute_redistributions(active_df)
-    sim_impact = compute_before_after_simulation(active_df, recommendations)
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Network Available Stock", f"{total_stock:,} units", help=GLOSSARY.get("Safety Stock"))
+with col2:
+    st.metric("Critical Patient Shortages", f"{total_shortage:,} units", delta=f"-{total_shortage} deficit" if total_shortage > 0 else "Zero Deficit", delta_color="inverse")
+with col3:
+    st.metric("Stock at Expiry Risk", f"{total_expired:,} units", delta="FEFO Monitored", delta_color="inverse", help=GLOSSARY.get("FEFO"))
+with col4:
+    rate_delta = "High" if fill_rate >= 90 else "Deficit Alert"
+    st.metric("Network Fill Rate", f"{fill_rate:.1f}%", delta=rate_delta, help=GLOSSARY.get("Fill Rate"))
 
-    # Status Checklist (Section 8) - All correspond to real completed operations!
-    checklist_text = f"""PROJECT EXECUTION AUDIT TRAIL
-------------------------------------------------------------
-[✓] Data Loaded              : {len(active_df)} active inventory records across {active_df['hospital_name'].nunique()} hospitals
-[✓] Data Cleaned             : 0 missing values, schema validated, causal boundaries enforced
-[✓] Inventory Analyzed       : {analysis['total_stock']:,} total units audited
-[✓] Demand Predicted         : 7-day lead time moving average & regression forecast generated
-[✓] Shortages Detected       : {analysis['shortage_count']} facilities with impending stockout deficit
-[✓] Expiry Risk Calculated   : {analysis['expiry_risk_count']} batches expiring within 30 days flagged
-[✓] Redistribution Optimized : MILP solver matched surplus to deficit via FEFO & distance
-[✓] Results Generated        : {len(recommendations)} transfer orders with transparent justification"""
+# Side by Side: Top Shortages & Top Expiries
+c_short, c_exp = st.columns([1, 1])
 
-    st.markdown(f'<div class="retro-status-box">{checklist_text}</div>', unsafe_allow_html=True)
+h_name_map = hospitals_df.set_index("hospital_id")["name"].to_dict() if not hospitals_df.empty else {}
+m_name_map = medicines_df.set_index("medicine_id")["name"].to_dict() if not medicines_df.empty else {}
 
-    # Step-by-Step Reviewer Demonstration Flow (Section 28)
-    demo_tabs = st.tabs([
-        "1. What System Found",
-        "2. Demand Predictions",
-        "3. Model Evaluation",
-        "4. Recommended Transfers",
-        "5. Why Transfers Were Selected",
-        "6. Before vs After Impact"
-    ])
-
-    # STEP 4: What the system found
-    with demo_tabs[0]:
-        st.markdown("#### Step 1: Inventory Health Audit (What Was Found)")
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-        with col_f1:
-            st.metric("Total Network Stock", f"{analysis['total_stock']:,} units")
-        with col_f2:
-            st.metric("Critical Shortages Flagged", f"{analysis['shortage_count']} facilities", delta=f"{analysis['shortage_count']} deficits", delta_color="inverse")
-        with col_f3:
-            st.metric("Usable Surplus Stock", f"{analysis['surplus_count']} batches")
-        with col_f4:
-            st.metric("Medicines Near Expiry", f"{analysis['expiry_risk_count']} batches", delta=f"≤ 30 days", delta_color="inverse")
-
-        st.markdown("##### Impending Shortages Requiring Immediate Action:")
-        if not analysis["shortages_df"].empty:
+with c_short:
+    st.markdown("##### 🚨 Top 5 Critical Shortages (Impending Deficits)")
+    if not day_state.empty and "unmet_demand" in day_state.columns:
+        short_df = day_state[day_state["unmet_demand"] > 0].sort_values("unmet_demand", ascending=False).head(5).copy()
+        if not short_df.empty:
+            short_df["Hospital"] = short_df["hospital_id"].map(h_name_map)
+            short_df["Medicine"] = short_df["medicine_id"].map(m_name_map)
+            short_df["Deficit Units"] = short_df["unmet_demand"].astype(int)
+            short_df["Current Stock"] = short_df["stock_remaining"].astype(int)
+            short_df["Status"] = STATUS_CONFIG["critical_shortage"]["badge"]
             st.dataframe(
-                analysis["shortages_df"][[
-                    "medicine_name", "hospital_name", "district", "is_rural", "current_stock", "daily_consumption", "days_remaining", "deficit", "risk"
-                ]].rename(columns={
-                    "medicine_name": "Medicine",
-                    "hospital_name": "Hospital",
-                    "district": "District",
-                    "is_rural": "Rural",
-                    "current_stock": "Current Stock",
-                    "daily_consumption": "Daily Usage",
-                    "days_remaining": "Days Remaining",
-                    "deficit": "Deficit (Units)",
-                    "risk": "Risk Level",
-                }),
+                short_df[["Hospital", "Medicine", "Current Stock", "Deficit Units", "Status"]],
                 hide_index=True,
                 use_container_width=True,
             )
+        else:
+            st.success("✅ No critical hospital shortages detected across the network.")
+    else:
+        st.info("No state data available for current selection.")
 
-    # STEP 5: What the system predicts
-    with demo_tabs[1]:
-        st.markdown("#### Step 2: Demand Prediction")
-        st.markdown("""
-        > **Plain Language Explanation**: The forecasting module estimates daily patient consumption for each medicine
-        > based on historical moving trends and outpatient visits, allowing hospitals to prepare before stockouts occur.
-        """)
-        pred_med = "Amoxicillin 500mg"
-        st.write(f"**Sample Medicine**: {pred_med}")
-        col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1:
-            st.metric("Current Daily Demand", "110 units / day")
-        with col_p2:
-            st.metric("Predicted Daily Demand", "118 units / day")
-        with col_p3:
-            st.metric("Predicted 7-Day Demand", "826 units")
-        st.caption("Calculation: 7-day consumption horizon + 5-day safety buffer. Explanatory details available on the MODEL page.")
+with c_exp:
+    st.markdown("##### ⚠️ Top 5 Expiring Batches / Write-offs")
+    if not day_state.empty and "expired_units" in day_state.columns:
+        exp_df = day_state[day_state["expired_units"] > 0].sort_values("expired_units", ascending=False).head(5).copy()
+        if not exp_df.empty:
+            exp_df["Hospital"] = exp_df["hospital_id"].map(h_name_map)
+            exp_df["Medicine"] = exp_df["medicine_id"].map(m_name_map)
+            exp_df["Units Expired"] = exp_df["expired_units"].astype(int)
+            exp_df["Status"] = STATUS_CONFIG["expiry_risk"]["badge"]
+            st.dataframe(
+                exp_df[["Hospital", "Medicine", "Units Expired", "Status"]],
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.success("✅ Zero expired write-offs recorded on this day. FEFO allocation active.")
+    else:
+        st.info("No expiry records available for current selection.")
 
-    # STEP 6: How good the model is
-    with demo_tabs[2]:
-        st.markdown("#### Step 3: Model Performance & Academic Validation")
-        st.markdown("""
-        > **Strict Evaluation Standard**: Models are evaluated strictly on unseen validation sets using walk-forward cross validation.
-        > **No Fake 'AI Accuracy'**: Demand prediction is a regression task evaluated via MAE, RMSE, and WAPE.
-        """)
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        with col_m1:
-            st.metric("MAE (Mean Abs Error)", "15.3 units")
-            st.caption("Average difference in medicine units. Lower is better.")
-        with col_m2:
-            st.metric("RMSE", "87.4 units")
-            st.caption("Penalizes large outlier forecast errors.")
-        with col_m3:
-            st.metric("WAPE", "61.6%")
-            st.caption("Weighted absolute percentage error.")
-        with col_m4:
-            st.metric("Training / Test Split", "80% / 20%")
-            st.caption("40,320 train / 10,080 test records.")
+st.markdown("---")
 
-    # STEP 7: What medicines should be moved
-    with demo_tabs[3]:
-        st.markdown("#### Step 4: Recommended Medicine Transfers")
-        if recommendations:
-            top_rec = recommendations[0]
+# ==============================================================================
+# BLOCK 2: WHAT SHOULD BE DONE (Action Cards & CSV Download)
+# ==============================================================================
+st.markdown("### 2. What Should Be Done: Recommended Transfer Directives")
+st.caption(f"Optimized inter-facility transfer directives calculated for Day {selected_day} under '{get_policy_display(selected_policy)}'")
+
+day_transfers = transfers_df[transfers_df["day"] == selected_day].copy() if not transfers_df.empty and "day" in transfers_df.columns else pd.DataFrame()
+if not day_transfers.empty and not filtered_hospitals.empty:
+    valid_ids = set(filtered_hospitals["hospital_id"])
+    day_transfers = day_transfers[day_transfers["from_hospital"].isin(valid_ids) | day_transfers["to_hospital"].isin(valid_ids)]
+
+if not day_transfers.empty:
+    day_transfers["From Facility"] = day_transfers["from_hospital"].map(h_name_map)
+    day_transfers["To Destination"] = day_transfers["to_hospital"].map(h_name_map)
+    day_transfers["Medicine Name"] = day_transfers["medicine_id"].map(m_name_map)
+    day_transfers["Est Transport Cost"] = (100.0 + day_transfers["distance_km"] * 2.5).round(0).astype(int)
+
+    # Top 3 Action Cards
+    st.markdown("##### Priority Transfer Directives:")
+    top_transfers = day_transfers.head(3)
+    card_cols = st.columns(len(top_transfers))
+    for idx, (_, row) in enumerate(top_transfers.iterrows()):
+        with card_cols[idx]:
+            reason_text = (
+                f"Deficit impending at destination; source retains adequate safety stock buffer. "
+                f"Transit requires {row['transit_days']} day(s) covering {row['distance_km']:.1f} km."
+            )
             st.markdown(f"""
-            <div class="hero-transfer-box">
-                <div class="hero-transfer-header">
-                    <span>PRIMARY TRANSFER DIRECTIVE #{1}</span>
-                    <span class="badge-retro badge-retro-danger">PRIORITY: {top_rec['priority']}</span>
+            <div style="border: 1px solid #334155; border-radius: 8px; padding: 14px; background-color: #1e293b; margin-bottom: 10px;">
+                <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase;">TRANSFER ACTION #{idx+1}</div>
+                <div style="font-size: 15px; font-weight: 700; color: #f8fafc; margin: 4px 0;">{row['Medicine Name']}</div>
+                <div style="font-size: 13px; color: #94a3b8;">
+                    <strong>From:</strong> {row['From Facility']}<br>
+                    <strong>To:</strong> {row['To Destination']}<br>
+                    <strong>Quantity:</strong> <span style="color:#10b981;font-weight:700;">{int(row['quantity']):,} units</span><br>
+                    <strong>Transit:</strong> {row['transit_days']} day(s) ({row['distance_km']:.1f} km)<br>
+                    <strong>Cost:</strong> ₹{row['Est Transport Cost']}
                 </div>
-                <div class="hero-transfer-grid">
-                    <div class="hero-transfer-field">
-                        <div class="hero-transfer-label">Medicine</div>
-                        <div class="hero-transfer-value">{top_rec['medicine']}</div>
-                    </div>
-                    <div class="hero-transfer-field">
-                        <div class="hero-transfer-label">From (Source Surplus)</div>
-                        <div class="hero-transfer-value">{top_rec['from_hospital']}</div>
-                    </div>
-                    <div class="hero-transfer-field">
-                        <div class="hero-transfer-label">To (Destination Shortage)</div>
-                        <div class="hero-transfer-value">{top_rec['to_hospital']}</div>
-                    </div>
-                    <div class="hero-transfer-field">
-                        <div class="hero-transfer-label">Quantity</div>
-                        <div class="hero-transfer-value">{top_rec['quantity']:,} units</div>
-                    </div>
-                    <div class="hero-transfer-field">
-                        <div class="hero-transfer-label">Distance & Transit</div>
-                        <div class="hero-transfer-value">{top_rec['distance_km']} km ({top_rec['transit_days']} day)</div>
-                    </div>
-                </div>
-                <div style="font-size:12px; margin-top:6px; color:#1e3a5f;">
-                    <strong>OPERATIONAL REASON:</strong> {top_rec['reason']}
+                <div style="font-size: 11px; color: #cbd5e1; margin-top: 8px; background-color: #0f172a; padding: 6px; border-radius: 4px;">
+                    <strong>Reason:</strong> {reason_text}
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # Table of all transfers
-            rec_df = pd.DataFrame([
-                {
-                    "Priority": r["priority"],
-                    "Medicine": r["medicine"],
-                    "From Hospital": r["from_hospital"],
-                    "To Hospital": r["to_hospital"],
-                    "Quantity": r["quantity"],
-                    "Distance (km)": r["distance_km"],
-                    "Est. Cost (₹)": f"₹{r['transport_cost']}",
-                    "Reason": r["reason"],
-                }
-                for r in recommendations
-            ])
-            st.dataframe(rec_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("Network inventory is currently balanced. No transfers required.")
+    # Detailed Table of all transfers
+    st.dataframe(
+        day_transfers[["From Facility", "To Destination", "Medicine Name", "quantity", "transit_days", "distance_km", "Est Transport Cost"]].rename(columns={
+            "quantity": "Transfer Units",
+            "transit_days": "Transit Days",
+            "distance_km": "Distance (km)",
+            "Est Transport Cost": "Cost (₹)",
+        }),
+        hide_index=True,
+        use_container_width=True,
+    )
 
-    # STEP 8: Why those transfers were selected
-    with demo_tabs[4]:
-        st.markdown("#### Step 5: Decision Justification & Audit Log")
-        st.markdown("""
-        > Every transfer directive generated by this system includes a transparent audit breakdown for project defense and viva review.
-        """)
-        for i, r in enumerate(recommendations[:3], 1):
-            w = r["why_details"]
-            with st.expander(f"🔍 [ WHY? ] Transfer #{i}: {r['quantity']} units of {r['medicine']} from {r['from_hospital']} to {r['to_hospital']}", expanded=(i==1)):
-                st.markdown(f"""
-                <div class="retro-status-box" style="margin:0;">
-WHY WAS THIS TRANSFER RECOMMENDED?
---------------------------------------------------------
-Medicine              : {w['medicine']}
-Destination Facility  : {w['to_hosp']} ({'Rural PHC — Higher Weight' if w['is_rural'] else 'Urban Facility'})
-Destination Stock     : {w['dest_stock']} units
-Predicted 7-Day Demand: {w['predicted_demand']} units
-Safety Stock Target   : {w['safety_stock']} units
-Expected Shortage     : {w['expected_shortage']} units
+    # Download Button
+    csv_data = day_transfers.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Download Transfer Orders (CSV)",
+        data=csv_data,
+        file_name=f"transfer_orders_day_{selected_day}_{selected_scenario}.csv",
+        mime="text/csv",
+        help="Download official transfer manifest for logistics dispatch and warehouse execution.",
+    )
+else:
+    st.info(f"No transfers recommended for Day {selected_day} under '{get_policy_display(selected_policy)}' (Network inventory is balanced).")
 
-Source Facility       : {w['from_hosp']}
-Source Usable Surplus : {w['source_surplus']} units
-Source Expiry Window  : {w['source_expiry_days']} days (Risk: {w['expiry_risk']})
-Transit Distance      : {w['distance_km']} km ({w['transit_days']} transit day)
-Estimated Cost        : ₹100 fixed + (₹2.5/km × {w['distance_km']}) = ₹{100 + 2.5 * w['distance_km']:.0f}
---------------------------------------------------------
-THEREFORE:
-Transfer {w['quantity']} units from {w['from_hosp']} to {w['to_hosp']}.
-Protects {w['to_hosp']} against imminent stockout while safely utilizing stock nearing shelf-life expiry (FEFO).
-                </div>
-                """, unsafe_allow_html=True)
-
-    # STEP 9: Before vs After impact
-    with demo_tabs[5]:
-        st.markdown("#### Step 6: Before vs After Impact Simulation")
-        b = sim_impact["before"]
-        a = sim_impact["after"]
-        imp = sim_impact["impact"]
-
-        c_imp1, c_imp2, c_imp3, c_imp4 = st.columns(4)
-        with c_imp1:
-            st.metric("Shortage Reduction", f"{imp['shortage_reduction_pct']}%", delta="Shortages Resolved")
-        with c_imp2:
-            st.metric("Wastage Reduction", f"{imp['wastage_reduction_pct']}%", delta="Expiring Stock Saved")
-        with c_imp3:
-            st.metric("Units Redistributed", f"{imp['medicine_redistributed']:,} units")
-        with c_imp4:
-            st.metric("Transport Cost Incurred", f"₹{imp['transport_cost']:,}")
-
-        st.markdown("##### Quantitative Before vs After Comparison:")
-        comp_df = pd.DataFrame([
-            {"Metric": "Critical Facility Shortages", "Before Redistribution": f"{b['critical_shortages']}", "After Redistribution": f"{a['critical_shortages']}", "Net Change": f"-{b['critical_shortages'] - a['critical_shortages']}"},
-            {"Metric": "Shortage Deficit Units", "Before Redistribution": f"{b['shortage_units']:,}", "After Redistribution": f"{a['shortage_units']:,}", "Net Change": f"-{b['shortage_units'] - a['shortage_units']:,}"},
-            {"Metric": "Stock at Expiry Risk (Units)", "Before Redistribution": f"{b['expiry_risk_stock']:,}", "After Redistribution": f"{a['expiry_risk_stock']:,}", "Net Change": f"-{b['expiry_risk_stock'] - a['expiry_risk_stock']:,}"},
-            {"Metric": "Excess Surplus Units", "Before Redistribution": f"{b['surplus_stock']:,}", "After Redistribution": f"{a['surplus_stock']:,}", "Net Change": f"-{b['surplus_stock'] - a['surplus_stock']:,}"},
-        ])
-        st.dataframe(comp_df, hide_index=True, use_container_width=True)
-
-    st.markdown("---")
+st.markdown("---")
 
 # ==============================================================================
-# STATE COMMAND CENTER NETWORK OVERVIEW (PRESERVED FUNCTIONALITY)
+# BLOCK 3: WHAT IT ACHIEVES (Impact vs Do Nothing, Trend Chart & Map)
 # ==============================================================================
-catalog_df = load_serving_table("scenario_catalog")
-hospitals_df = load_serving_table("hospitals")
-medicines_df = load_serving_table("medicines")
-state_df = load_serving_table("state_daily")
-transfers_df = load_serving_table("transfers")
+st.markdown("### 3. What It Achieves: Verified Optimization Impact")
+st.caption(f"Quantifiable operational improvements comparing '{get_policy_display(selected_policy)}' against 'Do nothing (Baseline)'")
 
-st.markdown("### 🌐 State Command Center Network Overview")
-st.caption("Real-time network operational health across simulated scenarios and operational days.")
+# Compute Impact from stored evaluation_optimizer and kpis_daily
+baseline_row = summary_df[(summary_df["scenario"] == selected_scenario) & (summary_df["policy"] == "no_transfer")]
+active_row = summary_df[(summary_df["scenario"] == selected_scenario) & (summary_df["policy"] == selected_policy)]
 
-scenarios_available = catalog_df["name"].tolist() if not catalog_df.empty else ["normal"]
-c_sc1, c_sc2, c_sc3 = st.columns(3)
-with c_sc1:
-    selected_scenario = st.selectbox("Operating Scenario", scenarios_available, index=0)
-with c_sc2:
-    selected_policy = st.selectbox("Redistribution Policy", ["optimizer", "greedy", "no_transfer"], index=0)
-with c_sc3:
-    max_day = int(state_df["day"].max()) if not state_df.empty else 13
-    selected_day = st.slider("Simulated Operational Day", 0, max_day, min(7, max_day))
+if not active_row.empty and not baseline_row.empty:
+    b_stockout = float(baseline_row["stockout_days_mean"].iloc[0])
+    a_stockout = float(active_row["stockout_days_mean"].iloc[0])
+    stockouts_avoided = max(0.0, b_stockout - a_stockout)
 
-# Filter scenario state
-scenario_state = state_df[(state_df["scenario"] == selected_scenario) & (state_df["policy"] == selected_policy)]
-if scenario_state.empty:
-    scenario_state = state_df
+    b_waste = float(baseline_row["wastage_units_mean"].iloc[0])
+    a_waste = float(active_row["wastage_units_mean"].iloc[0])
+    wastage_avoided = max(0.0, b_waste - a_waste)
 
-day_state = scenario_state[scenario_state["day"] == selected_day]
-if day_state.empty:
-    day_state = scenario_state
+    fill_active = float(active_row["fill_rate_mean"].iloc[0]) * 100.0
+    fill_base = float(baseline_row["fill_rate_mean"].iloc[0]) * 100.0
+    fill_gain = fill_active - fill_base
 
-# Dynamic KPI calculations (satisfies test_no_hardcoded_kpis_in_home)
-total_stock = int(day_state["stock_remaining"].sum()) if "stock_remaining" in day_state.columns else 0
-total_shortage = int(day_state["unmet_demand"].sum()) if "unmet_demand" in day_state.columns else 0
-total_expired = int(day_state["expired_units"].sum()) if "expired_units" in day_state.columns else 0
-total_demand = int(day_state["actual_demand"].sum()) if "actual_demand" in day_state.columns else 1
-dispensed = max(0, total_demand - total_shortage)
-fill_rate = (dispensed / total_demand) * 100.0 if total_demand > 0 else 100.0
+    trans_cost = float(active_row["transport_cost_mean"].iloc[0])
+else:
+    stockouts_avoided = 0.0
+    wastage_avoided = 0.0
+    fill_gain = 0.0
+    trans_cost = 0.0
 
-k1, k2, k3, k4 = st.columns(4)
-with k1:
-    st.metric("Network Available Stock", f"{total_stock:,} units")
-with k2:
-    st.metric("Unmet Patient Deficit", f"{total_shortage:,} units", delta=f"{total_shortage}" if total_shortage > 0 else "None", delta_color="inverse")
-with k3:
-    st.metric("Expired Units Written Off", f"{total_expired:,} units", delta="FEFO Monitored", delta_color="inverse")
-with k4:
-    st.metric("Network Demand Fill Rate", f"{fill_rate:.1f}%")
+i1, i2, i3, i4 = st.columns(4)
+with i1:
+    st.metric("Stockouts Avoided", f"{stockouts_avoided:.1f} days", delta=f"{stockouts_avoided:.1f} days reduced", help="Reduction in facility-days suffering medicine stockouts compared to Do Nothing.")
+with i2:
+    st.metric("Wastage Prevented", f"{wastage_avoided:,.0f} units", delta=f"{wastage_avoided:,.0f} saved", help="Units of medicine saved from expiring unused through timely redistribution.")
+with i3:
+    st.metric("Fill Rate Advantage", f"+{fill_gain:.1f}%", delta="Over Baseline", help="Improvement in patient prescription fulfillment over the zero-transfer baseline.")
+with i4:
+    st.metric("Total Transport Cost", f"₹{trans_cost:,.0f}", delta="Fixed + Mileage", delta_color="off", help="Logistics delivery expenditure incurred across the 14-day horizon.")
 
-# Simple Geographic Distribution Chart
-if not hospitals_df.empty and "latitude" in hospitals_df.columns:
-    st.markdown("##### Hospital Facilities & District Overview:")
-    h_summary = day_state.groupby("hospital_id").agg(
-        stock=("stock_remaining", "sum"),
-        shortage=("unmet_demand", "sum"),
-    ).reset_index()
-    map_df = hospitals_df.merge(h_summary, on="hospital_id", how="left").fillna(0)
-    map_df["Status"] = np.where(map_df["shortage"] > 0, "Stockout Deficit", "Adequate Stock")
+# Small Trend Chart: Unmet Demand Over Time
+if not state_df.empty and "unmet_demand" in state_df.columns:
+    trend_data = state_df[
+        (state_df["scenario"] == selected_scenario) &
+        (state_df["policy"].isin([selected_policy, "no_transfer"]))
+    ].groupby(["day", "policy"])["unmet_demand"].sum().reset_index()
 
-    c_m1, c_m2 = st.columns([1, 1])
-    with c_m1:
-        fig_bar = px.bar(
-            map_df,
-            x="district",
-            y="stock",
-            color="Status",
-            title="Available Stock by District",
-            color_discrete_map={"Stockout Deficit": "#c5221f", "Adequate Stock": "#2b547e"},
+    if not trend_data.empty:
+        trend_data["Policy"] = trend_data["policy"].map(lambda p: get_policy_display(p))
+        fig_trend = px.line(
+            trend_data,
+            x="day",
+            y="unmet_demand",
+            color="Policy",
+            title=f"Unmet Shortage Deficit Over 14-Day Horizon ({get_scenario_display(selected_scenario)})",
+            labels={"day": "Simulated Operational Day", "unmet_demand": "Unmet Deficit (Units)"},
+            color_discrete_map={get_policy_display("optimizer"): "#10b981", get_policy_display("no_transfer"): "#ef4444"},
+            markers=True,
         )
-        format_retro_chart(fig_bar, height=280)
+        fig_trend.update_layout(height=260, margin=dict(l=20, r=20, t=30, b=20))
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+# Geospatial Network Health Map & Regional Breakdown
+c_map, c_dist = st.columns([3, 2])
+
+with c_map:
+    st.markdown("##### 🗺️ Geospatial Facility Network Health")
+    if not filtered_hospitals.empty and "latitude" in filtered_hospitals.columns and not day_state.empty:
+        h_agg = day_state.groupby("hospital_id").agg(
+            stock=("stock_remaining", "sum"),
+            shortage=("unmet_demand", "sum"),
+        ).reset_index()
+        map_data = filtered_hospitals.merge(h_agg, on="hospital_id", how="left").fillna(0)
+        map_data["Status"] = np.where(
+            map_data["shortage"] > 0, STATUS_CONFIG["critical_shortage"]["label"],
+            np.where(map_data["stock"] < 200, STATUS_CONFIG["low_stock"]["label"], STATUS_CONFIG["normal"]["label"])
+        )
+
+        map_func = getattr(px, "scatter_map", getattr(px, "scatter_mapbox", None))
+        if map_func is not None:
+            fig_geo = map_func(
+                map_data,
+                lat="latitude",
+                lon="longitude",
+                color="Status",
+                size="bed_count",
+                hover_name="name",
+                hover_data={"hospital_type": True, "stock": True, "shortage": True, "latitude": False, "longitude": False},
+                color_discrete_map={
+                    STATUS_CONFIG["critical_shortage"]["label"]: STATUS_CONFIG["critical_shortage"]["color"],
+                    STATUS_CONFIG["low_stock"]["label"]: STATUS_CONFIG["low_stock"]["color"],
+                    STATUS_CONFIG["normal"]["label"]: STATUS_CONFIG["normal"]["color"],
+                },
+                zoom=7.0,
+                height=380,
+            )
+            if hasattr(px, "scatter_map"):
+                fig_geo.update_layout(map_style="open-street-map", margin=dict(l=0, r=0, t=10, b=0))
+            else:
+                fig_geo.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=10, b=0))
+            st.plotly_chart(fig_geo, use_container_width=True)
+        else:
+            st.dataframe(map_data[["name", "district", "Status", "stock", "shortage"]], hide_index=True)
+
+with c_dist:
+    st.markdown("##### 📊 Inventory vs Shortage by District")
+    if not filtered_hospitals.empty and not day_state.empty:
+        reg_summary = map_data.groupby("district").agg(
+            Available_Stock=("stock", "sum"),
+            Unmet_Shortage=("shortage", "sum"),
+        ).reset_index()
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=reg_summary["district"], y=reg_summary["Available_Stock"], name="Stock", marker_color="#0ea5e9"))
+        fig_bar.add_trace(go.Bar(x=reg_summary["district"], y=reg_summary["Unmet_Shortage"], name="Deficit", marker_color="#ef4444"))
+        fig_bar.update_layout(
+            barmode="group",
+            height=380,
+            margin=dict(l=10, r=10, t=10, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    with c_m2:
-        st.dataframe(
-            map_df[["name", "district", "hospital_type", "is_rural", "bed_count", "stock", "shortage"]].rename(columns={
-                "name": "Hospital Name",
-                "district": "District",
-                "hospital_type": "Facility Type",
-                "is_rural": "Rural",
-                "bed_count": "Beds",
-                "stock": "Stock Units",
-                "shortage": "Deficit Units",
-            }),
-            hide_index=True,
-            use_container_width=True,
-            height=280,
-        )
-
-st.markdown("""
-<div style="font-size:11px; color:#64748b; text-align:center; padding: 14px 0;">
-    Smart Medicine Redistribution System • Kerala Government Health Department • Classical Academic Portal v2.0
-</div>
-""", unsafe_allow_html=True)
+st.caption("Smart Medicine Redistribution System • Kerala Public Health Services • Academic Big Data Implementation")

@@ -1,179 +1,95 @@
-"""ABOUT Page: Big Data & Project Architecture Pipeline, Honest Tech Stack,
-Data Processing Quality Report, and Academic Methodology Reference.
-Retro desktop portal aesthetics.
-"""
+"""About page: 2-minute quickstart guide, project glossary, methodology, and limitations."""
 import sys
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-APP_DIR = Path(__file__).resolve().parent.parent
-if str(APP_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_DIR))
 
-try:
-    from app.retro_theme import apply_retro_theme, retro_header
-    from app.data_loader import load_serving_table
-    from app.data_manager import get_active_dataset
-except ImportError:
-    from retro_theme import apply_retro_theme, retro_header
-    from data_loader import load_serving_table
-    from data_manager import get_active_dataset
+from app.data_loader import load_serving_table, render_sample_banner
+from app.labels import GLOSSARY, SCENARIO_INFO, POLICY_LABELS, POLICY_DESCRIPTIONS
+from app.state import render_sidebar_filters
 
-st.set_page_config(page_title="ABOUT — System Architecture & Methodology", page_icon="ℹ️", layout="wide")
-apply_retro_theme()
+st.set_page_config(page_title="About & System Architecture", page_icon="ℹ️", layout="wide")
 
-retro_header(
-    title="PROJECT ARCHITECTURE & METHODOLOGY",
-    subtitle="End-to-End Pipeline Specification, Big Data Components & Viva Defense Guide"
-)
+st.title("ℹ️ About the Smart Medicine Redistribution System")
+st.markdown("**Architecture v4 • Academic Data Mining, Data Analysis & Big Data Implementation**")
 
-# Academic & Synthetic Data Disclaimer
-st.warning(
-    "⚠️ **ACADEMIC & SYNTHETIC DATA DISCLAIMER**:\n\n"
-    "All hospital facilities, patient consumption counts, inventory records, and batch numbers in this system "
-    "are produced deterministically by the discrete-event simulator engine for academic evaluation and research demonstration. "
-    "They do **NOT** represent confidential official government health records."
-)
+render_sample_banner()
 
-tab_arch, tab_etl, tab_tech, tab_scen = st.tabs([
-    "🏗️ Pipeline Architecture",
-    "⚙️ Data Processing & ETL",
-    "💻 Technology Stack (Active vs Planned)",
-    "🔬 Scenarios & Stress Tests"
-])
+# Load Serving Data
+hospitals_df = load_serving_table("hospitals")
+state_df = load_serving_table("state_daily")
+render_sidebar_filters(hospitals_df, state_df)
 
 # ==============================================================================
-# SECTION 21: BIG DATA / PROJECT ARCHITECTURE PIPELINE
+# SECTION 1: USE THIS DASHBOARD IN 2 MINUTES
 # ==============================================================================
-with tab_arch:
-    st.markdown("### 1. End-to-End Project Data Flow")
-    st.caption("Standard 8-stage data engineering and decision pipeline.")
+st.markdown("### ⏱️ Use This Dashboard in 2 Minutes")
+st.markdown("""
+1. **Executive Overview (Home)**:
+   - Check **What needs attention now** for critical shortage deficits and medicines nearing expiry.
+   - Inspect **What should be done** for recommended transfer directives and download logistics dispatch CSVs.
+   - Review **What it achieves** to see quantified stockout and wastage reductions compared with 'Do nothing'.
+2. **Hospital Administrator**:
+   - Select any hospital in Kerala to inspect local inventory levels, days of stock, and incoming/outgoing transfer manifests.
+3. **Scenario Comparison**:
+   - Compare the **Smart plan** against **Nearest surplus** and **Do nothing** across baseline conditions and emergency stress situations.
+4. **Replay & Audit**:
+   - Pick any past day and verify that real patient consumption matched the 95% forecast prediction interval.
+5. **Model Evaluation**:
+   - Review the empirical ML metrics (MAE, RMSE, WAPE), OPD ablation gains, and classification recall.
+""")
 
-    st.code("""
-DATA SOURCES
-  (Hospital Daily Formulary, OPD Attendance Logs, Supplier Lead Deliveries)
-       ↓
-DATA INGESTION
-  (Partitioned Parquet batches, reporting delays, noise simulation)
-       ↓
-DATA STORAGE
-  (Snappy-compressed Apache Parquet storage with DuckDB query layer)
-       ↓
-DATA PROCESSING
-  (Cleaning, deduplication, moving median imputation, feature engineering)
-       ↓
-DATA ANALYSIS
-  (Stockout detection, surplus quantification, shelf-life expiry tracking)
-       ↓
-DATA MINING / ML
-  (SARIMAX time series, Gradient Boosted trees, OPD leading indicator ablation)
-       ↓
-OPTIMIZATION
-  (Google OR-Tools Mixed-Integer Linear Program with receiving caps)
-       ↓
-REDISTRIBUTION
-  (Actionable transfer orders, vehicle transit planning, FEFO priority)
-    """, language="text")
-
-    st.markdown("---")
-    st.markdown("### 2. Information Barrier & Causality Guarantees")
-    st.markdown(r"""
-    To ensure scientific validity during evaluation, strict information boundaries are enforced:
-    - **Censored Demand**: Models observe only `dispensed = min(true_demand, available_stock)`. When stock is zero, latent unmet need is hidden from the ML forecaster.
-    - **No Lookahead Leakage**: When making decisions on Day $t$, only observations from Days $\le t$ are visible.
-    - **Mandatory Receiving Cap**: Destination clinics can never receive more units than their predicted deficit.
-    - **FEFO Allocation**: First-Expired, First-Out rule ensures batches nearing shelf-life are consumed first.
-    """)
+st.markdown("---")
 
 # ==============================================================================
-# SECTION 20: DATA PROCESSING PAGE
+# SECTION 2: PROJECT GLOSSARY
 # ==============================================================================
-with tab_etl:
-    st.markdown("### DATA PROCESSING & ETL PIPELINE")
-    st.caption("Data quality guarantees, sanitization metrics, and feature transformations.")
+st.markdown("### 📖 Project Glossary & Terminology")
+glossary_cols = st.columns(2)
+items = list(GLOSSARY.items())
+half = len(items) // 2
 
-    stats = st.session_state.get("etl_stats", {
-        "records_received": 50400,
-        "records_processed": 50400,
-        "missing_values": 0,
-        "invalid_records": 0,
-        "duplicates_removed": 0,
-    })
+with glossary_cols[0]:
+    for term, definition in items[:half]:
+        with st.expander(f"🔹 **{term}**", expanded=False):
+            st.write(definition)
 
-    st.markdown(f"""
-    <div class="retro-status-box">
-DATA PROCESSING
------------------------------------------
-Records received    : {stats.get('records_received', 50400)}
-Records processed   : {stats.get('records_processed', 50400)}
-Missing values      : {stats.get('missing_values', 0)}
-Invalid records     : {stats.get('invalid_records', 0)}
-Duplicates removed  : {stats.get('duplicates_removed', 0)}
-    </div>
-    """, unsafe_allow_html=True)
+with glossary_cols[1]:
+    for term, definition in items[half:]:
+        with st.expander(f"🔹 **{term}**", expanded=False):
+            st.write(definition)
 
-    with st.expander("🔍 [ SHOW DETAILS ] Technical Data Processing Pipeline Details"):
-        st.markdown("""
-        #### Detailed Pipeline Transformations:
-        1. **Deduplication Engine**: Identifies duplicate reports on composite key `(report_day, hospital_id, medicine_id)` and retains the most recent valid timestamp.
-        2. **Imputation & Forward Fill**: Missing daily observations are imputed using rolling facility-specific medians, avoiding zero-drop distortion.
-        3. **Feature Engineering**:
-           - Lag features: $t-1$, $t-2$, $t-7$ days of consumption.
-           - Rolling statistical windows: 7-day mean, standard deviation, and min/max.
-           - OPD fever and gastrointestinal leading indicators with 1-3 day offsets.
-        4. **Validation Bounds**:
-           - Non-negative stock constraints: $\\text{stock} \\ge 0$.
-           - Censored consumption bounds: $\\text{consumption} \\le \\text{stock}$.
-        """)
+st.markdown("---")
 
 # ==============================================================================
-# SECTION 21: TECHNOLOGY STACK (HONEST ACTIVE VS PLANNED)
+# SECTION 3: SYSTEM METHODOLOGY & ZERO-COMPUTE ARCHITECTURE
 # ==============================================================================
-with tab_tech:
-    st.markdown("### Technology Stack Specification")
-    st.caption("Honest demarcation between currently running software and planned scalable enterprise infrastructure.")
+st.markdown("### ⚙️ System Architecture & Zero-Compute Serving Layer")
+st.markdown("""
+This system implements a decoupled Big Data intelligence pipeline:
+- **Stateful Daily Simulation**: Generates multi-facility demand, OPD clinic visits, batch shelf-life aging, and inventory balances.
+- **PySpark ETL Engine**: Executes windowed lags, deduplication, and feature engineering (with automatic local DuckDB/Arrow fallback).
+- **Hybrid Machine Learning Models**: Combines high-volume seasonal estimators with global gradient-boosted trees and Random Forest risk classifiers.
+- **OR-Tools Mathematical Optimization (MILP)**: Solves multi-facility inventory redistribution using Mixed-Integer Linear Programming, enforcing receiving caps and soft FEFO tie-breaking.
+- **Zero-Compute Serving Presentation**: This Streamlit application operates purely as a high-speed presentation layer reading precomputed Parquet serving tables. **No model training, simulation, or heavy optimization runs inside the UI.**
+""")
 
-    tech_df = pd.DataFrame([
-        {"Component": "Core Programming", "Technology Used": "Python 3.12 / 3.14", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Primary runtime for simulation, models, and dashboard"},
-        {"Component": "Analytical Query Engine", "Technology Used": "DuckDB 1.0", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "In-process serverless SQL analytics over Parquet"},
-        {"Component": "Data Storage Format", "Technology Used": "Apache Parquet (Snappy)", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Columnar storage for fast, compact data snapshots"},
-        {"Component": "Mathematical Optimization", "Technology Used": "Google OR-Tools (CBC/GLOP)", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Mixed-Integer Linear Programming for redistribution"},
-        {"Component": "Forecasting & ML", "Technology Used": "Statsmodels SARIMAX & Scikit-Learn", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Autoregressive and Gradient Boosted demand prediction"},
-        {"Component": "Experiment Tracking", "Technology Used": "MLflow (SQLite backend)", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Model versioning and champion/challenger tracking"},
-        {"Component": "Web User Interface", "Technology Used": "Streamlit + Plotly", "Architecture Status": "ACTIVE & RUNNING", "Role in Project": "Classical presentation portal for command center & reviewers"},
-        {"Component": "Distributed Big Data ETL", "Technology Used": "Apache Spark (Local Mode)", "Architecture Status": "ACTIVE IN ETL", "Role in Project": "Batch ETL processing and window function feature generation"},
-        {"Component": "Streaming Message Broker", "Technology Used": "Apache Kafka", "Architecture Status": "Planned / Scalable Architecture", "Role in Project": "Designed for real-time IoT hospital inventory streaming in production"},
-        {"Component": "Cloud Data Lakehouse", "Technology Used": "Delta Lake / AWS S3", "Architecture Status": "Planned / Scalable Architecture", "Role in Project": "Targeted enterprise repository for multi-state scalability"},
-    ])
-
-    st.dataframe(tech_df, hide_index=True, use_container_width=True)
+st.markdown("---")
 
 # ==============================================================================
-# TAB 4: SCENARIOS & STRESS TESTS (PRESERVED FUNCTIONALITY)
+# SECTION 4: SYSTEM LIMITATIONS (HONEST ACADEMIC TRANSPARENCY)
 # ==============================================================================
-with tab_scen:
-    st.markdown("### Scenario Catalog & Distribution Shift Stress Tests")
-    st.caption("Pre-configured operational environments used to test redistribution robustness.")
+st.markdown("### ⚠️ Methodological Limitations")
+st.markdown("""
+In accordance with academic research standards, the following design boundaries apply:
+1. **Synthetic Data**: All hospital facilities, demand figures, and stock counts are generated reproducibly by the simulation engine; they do not represent official government statistics.
+2. **Simulation Assumptions**: Lead times, cost-per-kilometer rates (₹2.5/km), and OPD lead-lag correlations represent calibrated assumptions rather than live telemetry.
+3. **Local Spark Demonstration**: PySpark local-mode illustrates API competence and distributed data architecture, but does not provide multi-node cluster speedup on a single laptop.
+4. **Precomputed Presentation Layer**: The hosted dashboard displays published serving tables and does not retrain models on the fly during user sessions.
+""")
 
-    catalog_df = load_serving_table("scenario_catalog")
-    if not catalog_df.empty:
-        st.dataframe(
-            catalog_df[[
-                "name", "type", "description", "outbreak_multiplier", "is_monsoon", "supplier_delay_days"
-            ]].rename(columns={
-                "name": "Scenario Name",
-                "type": "Condition Type",
-                "description": "Operational Description",
-                "outbreak_multiplier": "Outbreak Multiplier",
-                "is_monsoon": "Monsoon Flag",
-                "supplier_delay_days": "Supplier Delay (Days)",
-            }),
-            hide_index=True,
-            use_container_width=True,
-        )
-    else:
-        st.info("Scenario catalog is available in serving data.")
+st.caption("Smart Medicine Redistribution System • Kerala Health Services • Academic Big Data Project v4.0")

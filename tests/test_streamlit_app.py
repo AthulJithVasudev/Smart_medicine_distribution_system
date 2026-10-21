@@ -86,3 +86,44 @@ def test_duckdb_projection_and_filtering():
     if not df.empty:
         assert list(df.columns) == ["medicine_id", "name"]
 
+
+def test_all_app_pages_syntax_valid():
+    """Verify all application pages parse as valid Python AST without syntax errors."""
+    app_files = list(Path("app").rglob("*.py"))
+    assert len(app_files) >= 8
+    for f in app_files:
+        content = f.read_text(encoding="utf-8")
+        tree = ast.parse(content)
+        assert tree is not None
+
+
+def test_labels_module_mappings():
+    """Verify labels.py provides bidirectional mappings and scenario tags."""
+    from app.labels import POLICY_LABELS, SCENARIO_INFO, get_policy_display, get_scenario_display
+    assert get_policy_display("optimizer") == "Smart plan (AI/MILP)"
+    assert get_policy_display("no_transfer") == "Do nothing (Baseline)"
+    assert "dengue_4x" in SCENARIO_INFO
+    assert SCENARIO_INFO["dengue_4x"]["tag"] == "New Situation"
+
+
+def test_all_app_pages_render_without_exception():
+    """Verify using Streamlit AppTest that every application page loads and renders on sample data."""
+    from streamlit.testing.v1 import AppTest
+    repo_root = Path(__file__).resolve().parent.parent
+    pages = [
+        "app/Home.py",
+        "app/pages/1_Hospital_Administrator.py",
+        "app/pages/2_Scenario_Comparison.py",
+        "app/pages/3_Replay.py",
+        "app/pages/4_Model_Evaluation.py",
+        "app/pages/5_About.py",
+    ]
+    for p in pages:
+        full_path = str(repo_root / p)
+        at = AppTest.from_file(full_path, default_timeout=15)
+        at.run()
+        assert not at.exception, f"Page {p} raised an exception during render: {at.exception}"
+
+
+
+
