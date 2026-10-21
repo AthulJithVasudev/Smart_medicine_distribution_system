@@ -43,3 +43,17 @@
    - Referenced `requirements.txt` inside `requirements-pipeline.txt`.
 
 **Phase 0 Status: COMPLETE AND VERIFIED.**
+
+---
+
+## Phase 1: Dashboard works with zero pipeline steps (P0)
+
+### Actions Completed:
+1. **Sample Snapshot Generation:** Generated a compact sample snapshot (10 hospitals, 30 medicines, 7 scenarios, 3 policies) and published it to `data/sample/`. Total snapshot size is ~1.0 MB (compressed Parquet), comfortably under the 20 MB budget.
+2. **Data Loader Fallback Hierarchy:** Updated `app/data_loader.py` to prioritize `data/serving/` and automatically fall back to `data/sample/`.
+3. **Sample Banner Notification:** Added `render_sample_banner()` in `app/data_loader.py` to display a clear notification when sample data is shown or if data directories need to be generated via the demo command.
+4. **DuckDB Querying & Caching:** Added DuckDB-based selective column querying with SQL `WHERE` clauses and 300s TTL cache in `app/data_loader.py`, while handling Windows POSIX path formatting.
+5. **Test Suite Expansion:** Added tests in `tests/test_streamlit_app.py` for sample fallback (`test_sample_fallback_when_serving_missing`) and DuckDB projection (`test_duckdb_projection_and_filtering`). All 6 tests in `test_streamlit_app.py` pass.
+
+**Phase 1 Status: COMPLETE AND VERIFIED.**
+

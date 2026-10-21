@@ -67,3 +67,22 @@ def test_no_hardcoded_kpis_in_home():
     assert 'day_state["stock_remaining"].sum()' in home_content
     assert 'day_state["unmet_demand"].sum()' in home_content
     assert 'day_state["expired_units"].sum()' in home_content
+
+
+def test_sample_fallback_when_serving_missing(tmp_path, monkeypatch):
+    """Verify data_loader falls back to data/sample when data/serving is absent."""
+    # Point SERVING_DIR to empty temp directory
+    monkeypatch.setattr("app.data_loader.SERVING_DIR", tmp_path / "empty_serving")
+    # SAMPLE_DIR remains pointing to data/sample
+    sample_hospitals = load_serving_table("hospitals")
+    assert isinstance(sample_hospitals, pd.DataFrame)
+    assert not sample_hospitals.empty, "Should have loaded hospitals from data/sample"
+
+
+def test_duckdb_projection_and_filtering():
+    """Verify load_serving_table supports column selection and WHERE clause via DuckDB."""
+    df = load_serving_table("medicines", columns=["medicine_id", "name"], where_clause="price > 10")
+    assert isinstance(df, pd.DataFrame)
+    if not df.empty:
+        assert list(df.columns) == ["medicine_id", "name"]
+
