@@ -180,6 +180,11 @@ st.markdown("### 2. What Should Be Done: Recommended Transfer Directives")
 st.caption(f"Optimized inter-facility transfer directives calculated for Day {selected_day} under '{get_policy_display(selected_policy)}'")
 
 day_transfers = transfers_df[transfers_df["day"] == selected_day].copy() if not transfers_df.empty and "day" in transfers_df.columns else pd.DataFrame()
+if not day_transfers.empty:
+    if "scenario" in day_transfers.columns:
+        day_transfers = day_transfers[day_transfers["scenario"] == selected_scenario]
+    if "policy" in day_transfers.columns:
+        day_transfers = day_transfers[day_transfers["policy"] == selected_policy]
 if not day_transfers.empty and not filtered_hospitals.empty:
     valid_ids = set(filtered_hospitals["hospital_id"])
     day_transfers = day_transfers[day_transfers["from_hospital"].isin(valid_ids) | day_transfers["to_hospital"].isin(valid_ids)]

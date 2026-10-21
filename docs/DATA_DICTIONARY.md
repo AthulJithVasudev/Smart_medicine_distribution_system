@@ -79,17 +79,17 @@
 
 - **Path:** `data/serving/evaluation_optimizer.parquet`
 - **Row Count:** 21
-- **File Size:** 7.7 KB
+- **File Size:** 8.2 KB
 
 | Column Name | Data Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
 | `scenario` | `VARCHAR` | YES | Evaluation scenario key (e.g. normal, monsoon_surge, dengue_4x) |
 | `policy` | `VARCHAR` | YES | Redistribution policy key (optimizer, greedy, no_transfer) |
 | `seeds_count` | `BIGINT` | YES | System attribute `seeds_count` |
-| `wastage_units_mean` | `DOUBLE` | YES | System attribute `wastage_units_mean` |
-| `wastage_units_std` | `DOUBLE` | YES | System attribute `wastage_units_std` |
 | `stockout_days_mean` | `DOUBLE` | YES | System attribute `stockout_days_mean` |
 | `stockout_days_std` | `DOUBLE` | YES | System attribute `stockout_days_std` |
+| `wastage_units_mean` | `DOUBLE` | YES | System attribute `wastage_units_mean` |
+| `wastage_units_std` | `DOUBLE` | YES | System attribute `wastage_units_std` |
 | `fill_rate_mean` | `DOUBLE` | YES | System attribute `fill_rate_mean` |
 | `fill_rate_std` | `DOUBLE` | YES | System attribute `fill_rate_std` |
 | `transport_cost_mean` | `DOUBLE` | YES | System attribute `transport_cost_mean` |
@@ -121,7 +121,7 @@
 
 - **Path:** `data/serving/kpis_daily.parquet`
 - **Row Count:** 294
-- **File Size:** 9.7 KB
+- **File Size:** 12.1 KB
 
 | Column Name | Data Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
@@ -162,7 +162,7 @@
 
 - **Path:** `data/serving/replay.parquet`
 - **Row Count:** 88,200
-- **File Size:** 665.2 KB
+- **File Size:** 606.1 KB
 
 | Column Name | Data Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
@@ -175,10 +175,10 @@
 | `forecast` | `DOUBLE` | YES | Predicted demand for the upcoming decision horizon |
 | `lower_bound` | `DOUBLE` | YES | System attribute `lower_bound` |
 | `upper_bound` | `DOUBLE` | YES | System attribute `upper_bound` |
-| `actual_demand` | `BIGINT` | YES | System attribute `actual_demand` |
-| `unmet_demand` | `BIGINT` | YES | System attribute `unmet_demand` |
+| `actual_demand` | `DOUBLE` | YES | System attribute `actual_demand` |
+| `unmet_demand` | `DOUBLE` | YES | System attribute `unmet_demand` |
 | `stock_remaining` | `BIGINT` | YES | System attribute `stock_remaining` |
-| `expired_units` | `BIGINT` | YES | System attribute `expired_units` |
+| `expired_units` | `DOUBLE` | YES | System attribute `expired_units` |
 
 ---
 
@@ -224,7 +224,7 @@
 
 - **Path:** `data/serving/state_daily.parquet`
 - **Row Count:** 88,200
-- **File Size:** 231.0 KB
+- **File Size:** 243.3 KB
 
 | Column Name | Data Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
@@ -235,17 +235,17 @@
 | `hospital_id` | `VARCHAR` | YES | Unique identifier of the government hospital (e.g. H01) |
 | `medicine_id` | `VARCHAR` | YES | Unique medicine identifier (e.g. M01) |
 | `stock_remaining` | `BIGINT` | YES | System attribute `stock_remaining` |
-| `actual_demand` | `BIGINT` | YES | System attribute `actual_demand` |
-| `unmet_demand` | `BIGINT` | YES | System attribute `unmet_demand` |
-| `expired_units` | `BIGINT` | YES | System attribute `expired_units` |
+| `actual_demand` | `DOUBLE` | YES | System attribute `actual_demand` |
+| `unmet_demand` | `DOUBLE` | YES | System attribute `unmet_demand` |
+| `expired_units` | `DOUBLE` | YES | System attribute `expired_units` |
 
 ---
 
 ### Table: `transfers`
 
 - **Path:** `data/serving/transfers.parquet`
-- **Row Count:** 5,454
-- **File Size:** 75.0 KB
+- **Row Count:** 884
+- **File Size:** 23.1 KB
 
 | Column Name | Data Type | Nullable | Description |
 | :--- | :--- | :---: | :--- |
@@ -258,5 +258,7 @@
 | `transit_days` | `BIGINT` | YES | System attribute `transit_days` |
 | `arrival_day` | `BIGINT` | YES | System attribute `arrival_day` |
 | `distance_km` | `DOUBLE` | YES | Euclidean / road distance between facilities in kilometers |
+| `scenario` | `VARCHAR` | YES | Evaluation scenario key (e.g. normal, monsoon_surge, dengue_4x) |
+| `policy` | `VARCHAR` | YES | Redistribution policy key (optimizer, greedy, no_transfer) |
 
 ---

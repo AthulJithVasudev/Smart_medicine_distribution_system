@@ -176,6 +176,11 @@ if not transfers_df.empty:
         (transfers_df["day"] == selected_day) &
         ((transfers_df["from_hospital"] == selected_h_id) | (transfers_df["to_hospital"] == selected_h_id))
     ].copy()
+    if not h_trans.empty:
+        if "scenario" in h_trans.columns:
+            h_trans = h_trans[h_trans["scenario"] == selected_scenario]
+        if "policy" in h_trans.columns:
+            h_trans = h_trans[h_trans["policy"] == selected_policy]
 
     if not h_trans.empty:
         h_trans["From Facility"] = h_trans["from_hospital"].map(h_dict)
