@@ -153,11 +153,14 @@ def train_models_pipeline(profile: str = "dev") -> None:
 
 
 def main():
+    import os
+    default_profile = os.environ.get("MEDSYS_PROFILE", "dev")
     parser = argparse.ArgumentParser(description="Train ML models and evaluate baselines")
-    parser.add_argument("--profile", default="dev", choices=["dev", "demo", "full"], help="Profile to train")
+    parser.add_argument("--profile", default=default_profile, choices=["dev", "demo", "full"], help=f"Profile to train (default: {default_profile})")
     args = parser.parse_args()
     train_models_pipeline(profile=args.profile)
 
 
 if __name__ == "__main__":
     main()
+

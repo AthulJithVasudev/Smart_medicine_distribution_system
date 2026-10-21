@@ -265,8 +265,10 @@ def run_scenario_matrix(
 
 
 def main():
+    import os
+    default_profile = os.environ.get("MEDSYS_PROFILE", "dev")
     parser = argparse.ArgumentParser(description="Run Smart Medicine Redistribution Scenario Engine")
-    parser.add_argument("--profile", default="dev", choices=["dev", "demo", "full"], help="Profile to use")
+    parser.add_argument("--profile", default=default_profile, choices=["dev", "demo", "full"], help=f"Profile to use (default: {default_profile})")
     parser.add_argument("--scenario", default="normal", help="Scenario name or 'all'")
     parser.add_argument("--policy", default="optimizer", help="Policy name ('optimizer', 'greedy', 'no_transfer', or 'all')")
     parser.add_argument("--seeds", type=int, default=3, help="Number of random seeds to evaluate")

@@ -57,3 +57,34 @@
 
 **Phase 1 Status: COMPLETE AND VERIFIED.**
 
+---
+
+## Phase 2: One-command run (P0)
+
+### Actions Completed:
+1. **Unified CLI Subcommands (`pipeline/cli.py` & `pipeline/__main__.py`):**
+   - Added subcommands: `demo`, `doctor`, `app`, `prepare`, `train`, `run_scenario`, `export`.
+   - Enabled invocation via `python -m pipeline <cmd>` and registered `pipeline` and `medsys` script entrypoints in `pyproject.toml`.
+2. **Environment Variable Default Profile (`MEDSYS_PROFILE`):**
+   - Profile defaults to `os.environ.get("MEDSYS_PROFILE", "dev")` across all entry points, making `--profile dev` optional while preserving manual override.
+3. **Automated Shell Runners:**
+   - Created `run_demo.ps1` for Windows PowerShell (handles venv creation, pip upgrade/install, system doctor check, and demo pipeline execution).
+   - Created `run_demo.sh` for Linux/macOS/Bash environments.
+4. **Diagnostic Doctor (`pipeline/doctor.py`):**
+   - Added diagnostic suite checking Python (>=3.12), Java/PySpark status with fallback notice, 14 required packages, writable directories, and `ETL_BACKEND`.
+5. **Measured Timings & Progress Tracking:**
+   - Added step-by-step progress logging with elapsed times and row counts per stage.
+   - Benchmark on Windows development laptop (DEV profile, 1 seed):
+     - Stage 1 (Prepare & ETL): 28.5s (22,013 curated rows)
+     - Stage 2 (Train Models): 42.1s (baselines + hybrid forecasters + clustering + risk classification + anomaly)
+     - Stage 3 (Scenarios Matrix): 227.9s (21 scenario-policy runs)
+     - Stage 4 (Export Parquet): 1.0s (12 serving tables)
+     - Total runtime: 299.5s (~5.0 minutes)
+6. **Testing Suite:**
+   - Created `tests/test_cli_and_doctor.py` covering doctor diagnostics, default profile resolution, and CLI subcommands. All 7 tests pass.
+7. **Acceptance Verification:**
+   - Executed `powershell -ExecutionPolicy Bypass -File .\run_demo.ps1 -SkipInstall`. Completed all stages cleanly and printed dashboard launch instructions.
+
+**Phase 2 Status: COMPLETE AND VERIFIED.**
+
+

@@ -151,8 +151,10 @@ def export_serving_data(profile: str = "dev", target_dir: str = "data/serving") 
 
 
 def main():
+    import os
+    default_profile = os.environ.get("MEDSYS_PROFILE", "dev")
     parser = argparse.ArgumentParser(description="Export and publish serving data for Streamlit dashboard")
-    parser.add_argument("--profile", default="dev", choices=["dev", "demo", "full"], help="Profile to export")
+    parser.add_argument("--profile", default=default_profile, choices=["dev", "demo", "full"], help=f"Profile to export (default: {default_profile})")
     parser.add_argument("--target-dir", default="data/serving", help="Target serving directory")
     args = parser.parse_args()
     export_serving_data(profile=args.profile, target_dir=args.target_dir)
@@ -160,3 +162,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

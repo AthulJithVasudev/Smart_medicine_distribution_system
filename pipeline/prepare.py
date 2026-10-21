@@ -71,11 +71,14 @@ def prepare_profile_data(profile: str = "dev") -> None:
 
 
 def main():
+    import os
+    default_profile = os.environ.get("MEDSYS_PROFILE", "dev")
     parser = argparse.ArgumentParser(description="Prepare historical dataset and run ETL")
-    parser.add_argument("--profile", default="dev", choices=["dev", "demo", "full"], help="Profile to run")
+    parser.add_argument("--profile", default=default_profile, choices=["dev", "demo", "full"], help=f"Profile to run (default: {default_profile})")
     args = parser.parse_args()
     prepare_profile_data(profile=args.profile)
 
 
 if __name__ == "__main__":
     main()
+
