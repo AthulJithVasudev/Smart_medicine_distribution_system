@@ -11,7 +11,13 @@ def try_get_spark_session(shuffle_partitions: int = 8):
     """
     Attempt to create a local-mode PySpark session with 8-16 shuffle partitions.
     Returns SparkSession if Java/PySpark environment is fully functional, else None.
+    If ETL_BACKEND is set to 'duckdb', skips Spark JVM initialization entirely.
     """
+    import os
+    if os.environ.get("ETL_BACKEND", "spark").lower() == "duckdb":
+        logger.info("ETL_BACKEND=duckdb configured. Using DuckDB/Arrow engine.")
+        return None
+
     try:
         from pyspark.sql import SparkSession
         spark = (

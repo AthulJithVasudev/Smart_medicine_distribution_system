@@ -1,3 +1,10 @@
+[project]
+name = "smart-medicine-distribution-system"
+version = "4.0.0"
+description = "Smart Medicine Redistribution System for Government Hospitals"
+requires-python = ">=3.12"
+readme = "README.md"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

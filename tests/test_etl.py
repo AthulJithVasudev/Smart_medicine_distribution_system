@@ -189,3 +189,22 @@ def test_dev_etl_completes_successfully(temp_data_dir):
     assert "rolling_mean_7d_consumption" in curated.columns
     assert "is_rural" in curated.columns
     assert "criticality" in curated.columns
+
+
+def test_etl_backend_fallback_duckdb(temp_data_dir, monkeypatch):
+    """Verify ETL_BACKEND=duckdb produces valid curated tables with expected columns."""
+    monkeypatch.setenv("ETL_BACKEND", "duckdb")
+    sim = Simulator(config="configs/dev.yaml", seed=42)
+    obs_df, _ = sim.run(days=10)
+
+    curated = run_etl(
+        base_dir=str(temp_data_dir / "duckdb_backend"),
+        obs_df=obs_df,
+        hospitals_map=sim.hospitals,
+        medicines_map=sim.medicines,
+    )
+
+    assert not curated.empty
+    assert "days_of_stock" in curated.columns
+    assert "consumption_lag_1" in curated.columns
+    assert "rolling_mean_7d_consumption" in curated.columns
