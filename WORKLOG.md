@@ -109,5 +109,99 @@
 
 **Phase 3 Status: COMPLETE AND VERIFIED (71/71 tests passing).**
 
+---
+
+## Phase 4: Make the dashboard easy to navigate and use (P1)
+
+### Tasks Completed:
+1. **Shared UI Layer (`app/labels.py`):**
+   - Single source of truth for all human-readable policy names (`Smart plan`, `Nearest surplus`, `Do nothing`).
+   - Plain-language scenario names with categorized "seen before" vs "new situation" tags.
+   - Status badges combining text and accessible color indicators (`Critical shortage`, `Low stock`, `Normal`, `Surplus`, `Expiring soon`, `Active transfer`).
+   - Comprehensive system glossary dictionary with inline tooltips (`help=` args).
+2. **State Management & URL Synchronization (`app/state.py`):**
+   - Centralized `st.session_state` management for scenario, policy, simulation day, and district filters.
+   - Automatically initializes default day to the day with the highest network shortages.
+   - Synchronizes filter selections bidirectionally with `st.query_params` for shareable URL links.
+   - Built-in 5-step **"Guided Demo Tour"** in the sidebar.
+3. **Action-First Home Page (`app/Home.py`):**
+   - Implemented 3-role selector: *Government Health Officer*, *Hospital Administrator*, *Researcher / Data Scientist*.
+   - **Block 1: What needs attention now** (Top 5 critical shortages, top 5 expiring batches, high-visibility KPI metric cards).
+   - **Block 2: What should be done** (Action cards with plain-language justification, vehicle logistics cost, and "Download Transfer Orders (CSV)" button).
+   - **Block 3: What it achieves** (Wastage prevented in units and INR, stockouts avoided, fill rate comparison vs Do Nothing, Plotly trend chart, and interactive OpenStreetMap visualization).
+   - Persistent banner for bundled sample data and synthetic data disclaimer.
+4. **Canonical Pages Overhaul:**
+   - `app/pages/1_Hospital_Administrator.py`: Facility selector, days of supply, demand forecast with 95% confidence bands, incoming/outgoing manifests, CSV download.
+   - `app/pages/2_Scenario_Comparison.py`: Standard vs novel scenario tabs, multi-seed spread, dynamic takeaway summary computed from real run data.
+   - `app/pages/3_Replay.py`: Historical forecast auditing against realized patient demand with MAE and bias metrics.
+   - `app/pages/4_Model_Evaluation.py`: Verdict cards (ML vs 7-day average WAPE, risk classifier recall, anomaly detection), OPD feature ablation expander, theoretical Oracle bound.
+   - `app/pages/5_About.py`: 2-minute quickstart, interactive glossary, architecture breakdown, and limitations.
+   - Removed obsolete legacy pages (`1_DATA.py`, `2_ANALYSIS.py`, `3_RECOMMENDATIONS.py`, `4_MODEL.py`, `retro_theme.py`).
+5. **Testing & Quality Audit:**
+   - Extended `tests/test_streamlit_app.py` with AST zero-compute import verification, sample data loader fallback test, and Streamlit `AppTest` automated rendering across all 6 pages.
+   - Verified that all 9 Streamlit tests pass cleanly.
+
+**Phase 4 Status: COMPLETE AND VERIFIED.**
+
+---
+
+## Phase 5: README and Documentation (P1)
+
+### Tasks Completed:
+1. **Restructured `README.md`:**
+   - Immediate title, one-line summary, CI status badge, and `<LIVE_APP_URL>` placeholder.
+   - **Quick start in three commands** (Option A: Instant dashboard with bundled sample data; Option B: One-command full pipeline run via `run_demo.ps1`).
+   - 5 core dashboard capabilities.
+   - Clean Mermaid architecture flowchart.
+   - Technology stack matrix and clear system limitations.
+   - Comprehensive links to `docs/`.
+2. **Detailed Documentation Suite in `docs/`:**
+   - `docs/ARCHITECTURE.md`: Complete v4 architecture, component interactions, and verified OR-Tools MILP formulation.
+   - `docs/USER_GUIDE.md`: 2-minute page tour, role explanations, status badge color conventions, and guided tour steps.
+   - `docs/DEVELOPER.md`: Repo structure, profiles (`dev`, `demo`, `full`), CLI subcommands, adding scenarios, and Streamlit Cloud deployment.
+   - `docs/TROUBLESHOOTING.md`: Guidance for Java/JVM missing, Windows winutils, port conflicts, sample fallback, and Python versions.
+   - `docs/DATA_DICTIONARY.md`: Generated via `tools/make_data_dictionary.py` directly from the 12 serving Parquet tables.
+   - `docs/DEMO_SCRIPT.md`: 5-minute viva presentation walkthrough with 6 rigorous examiner questions and answers.
+   - `docs/CLAIMS_TO_EVIDENCE.md`: Table of every claim mapped to empirical metrics, unit tests, and dashboard pages (zero fabricated numbers).
+3. **Automated Schema Tool:**
+   - Created `tools/make_data_dictionary.py` using DuckDB to auto-document column types, descriptions, row counts, and sample schemas.
+
+**Phase 5 Status: COMPLETE AND VERIFIED.**
+
+---
+
+## Phase 6: Cloud Readiness & Polish (P2)
+
+### Tasks Completed:
+1. **GitHub Actions Workflows:**
+   - Verified `.github/workflows/ci.yml` (Ubuntu, Java 17, Python 3.12, Pytest suite).
+   - Enhanced `.github/workflows/pipeline.yml`: Added `permissions: contents: write`, `actions/setup-java@v4` (Java 17), `actions/setup-python@v5` (Python 3.12), artifact upload, and automated orphan branch publication (`serving-data`) for cloud serving data syncing.
+2. **Streamlit Community Cloud Readiness:**
+   - Pinned root `requirements.txt` to strictly serving dependencies (`streamlit`, `pandas`, `duckdb`, `plotly`, `pydeck`, `pyarrow`).
+   - Entry point is `app/Home.py`.
+   - Dashboard opens instantly from `data/sample/` with zero pipeline execution required.
+   - Documented step-by-step deployment instructions in `docs/DEVELOPER.md`.
+3. **Devcontainer:**
+   - Added `.devcontainer/devcontainer.json` featuring Python 3.12, Java 17, port forwarding for 8501, VS Code Python extensions, and postCreateCommand.
+4. **System Doctor Verification:**
+   - `python -m pipeline doctor` passes all checks cleanly with expected Java fallback notice.
+
+**Phase 6 Status: COMPLETE AND VERIFIED.**
+
+---
+
+## Final Verification Checklist Results
+
+| Check | Requirement | Result | Evidence |
+| :-: | :--- | :---: | :--- |
+| **1** | Fresh clone with minimal `requirements.txt` launches dashboard on sample data | **PASS** | `data/sample/*.parquet` bundled; `AppTest` verifies all 6 pages render cleanly. |
+| **2** | `python -m pipeline doctor` passes | **PASS** | Python, packages, directories, backend checked and reported green. |
+| **3** | `.\run_demo.ps1` runs end-to-end on `dev` profile | **PASS** | Measured ~5.0 minutes execution time across all 4 stages. |
+| **4** | Full test suite `pytest -ra` is green | **PASS** | **74 passed, 0 failed** across 11 test files in 7m 51s. |
+| **5** | Zero-compute rule: `app/` contains no ML/solver imports | **PASS** | Verified by AST analysis in `test_app_contains_no_training_or_optimization_imports`. |
+| **6** | README & `ARCHITECTURE.md` formulation matches `solver.py` | **PASS** | Anti-dumping receiving cap, soft FEFO, timing constraint, and explicit wastage verified. |
+| **7** | No fabricated numbers: all figures come from data | **PASS** | All metrics in `CLAIMS_TO_EVIDENCE.md` extracted via DuckDB from actual run parquet files. |
+| **8** | `WORKLOG.md` complete and up-to-date | **PASS** | Full audit trail maintained across Phases 0 through 6. |
+
 
 
