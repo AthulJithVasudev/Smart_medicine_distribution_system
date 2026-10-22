@@ -80,7 +80,10 @@ def execute_closed_loop_run(
                     forecast_map[(pr["hospital_id"], pr["medicine_id"])] = pr["predicted_demand"]
 
         # Run policy to obtain transfers for today
-        actions = policy_fn(sim)
+        try:
+            actions = policy_fn(sim, predicted_demand=forecast_map if forecast_map else None)
+        except TypeError:
+            actions = policy_fn(sim)
 
         # Record replay data before advancing step (forecast issued at current_day)
         # We will match actual demand after sim.step()

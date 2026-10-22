@@ -325,40 +325,14 @@ def generate_transfers(hospitals_df, medicines_df):
 
 
 def main():
-    print("Generating prominent, realistic benchmark data for Smart Medicine Redistribution...")
-    hospitals_df, medicines_df = load_hospitals_and_medicines()
+    print("Generating authentic simulation data via closed-loop pipeline engine...")
+    from pipeline.run_scenario import run_scenario_matrix
+    from pipeline.export import export_serving_data
 
-    # 1. evaluation_optimizer
-    eval_opt_df = generate_evaluation_optimizer()
-    print(f"Generated evaluation_optimizer ({len(eval_opt_df)} rows)")
-
-    # 2. kpis_daily
-    kpis_df = generate_kpis_daily()
-    print(f"Generated kpis_daily ({len(kpis_df)} rows)")
-
-    # 3. replay & state_daily
-    replay_df, state_df = generate_replay_and_state(hospitals_df, medicines_df)
-    print(f"Generated replay ({len(replay_df)} rows) and state_daily ({len(state_df)} rows)")
-
-    # 4. transfers
-    transfers_df = generate_transfers(hospitals_df, medicines_df)
-    print(f"Generated transfers ({len(transfers_df)} rows)")
-
-    # Save to all target locations:
-    targets = [SERVING_DIR, SAMPLE_DIR, MATRIX_DIR]
-    for target in targets:
-        target.mkdir(parents=True, exist_ok=True)
-        eval_opt_df.to_parquet(target / "evaluation_optimizer.parquet", index=False)
-        kpis_df.to_parquet(target / "kpis_daily.parquet", index=False)
-        replay_df.to_parquet(target / "replay.parquet", index=False)
-        state_df.to_parquet(target / "state_daily.parquet", index=False)
-        transfers_df.to_parquet(target / "transfers.parquet", index=False)
-        # Also copy to dev matrix names if matrix dir
-        if target == MATRIX_DIR:
-            eval_opt_df.to_parquet(target / "summary.parquet", index=False)
-            kpis_df.to_parquet(target / "daily_kpis.parquet", index=False)
-
-    print("All Parquet datasets published successfully across serving, sample, and matrix directories!")
+    run_scenario_matrix(profile="dev", seeds=1)
+    export_serving_data(profile="dev", target_dir=str(SERVING_DIR))
+    export_serving_data(profile="dev", target_dir=str(SAMPLE_DIR))
+    print("Serving and sample datasets regenerated successfully using closed-loop pipeline!")
 
 
 if __name__ == "__main__":

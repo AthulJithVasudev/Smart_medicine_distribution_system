@@ -46,40 +46,37 @@ def init_session_state(state_df: pd.DataFrame) -> None:
 
 
 def render_guided_tour() -> None:
-    """Render the 5-step viva/reviewer guided demonstration tour."""
-    with st.sidebar.expander("🧭 **Guided Viva Tour (5 Steps)**", expanded=False):
-        st.caption("One-click walkthrough setting scenarios, policies, and parameters for viva examiners:")
+    """Render the simplified viva/reviewer demonstration tour."""
+    with st.sidebar.expander("🧭 **Guided Viva Tour**", expanded=False):
+        st.caption("Quick demonstration presets for project presentation and viva examination:")
 
-        if st.button("1️⃣ Step 1: Normal Operations", use_container_width=True, help="Observe baseline redistribution across Kerala hospitals"):
+        if st.button("1️⃣ Normal Operations", use_container_width=True, help="Observe baseline routine inventory and redistribution"):
             st.session_state["scenario"] = "normal"
             st.session_state["policy"] = "optimizer"
             st.session_state["day"] = 5
             st.query_params.update({"scenario": "normal", "policy": "optimizer", "day": 5})
             st.rerun()
-        st.markdown("<div style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Look at: Balanced stock levels and small routine transfers.</div>", unsafe_allow_html=True)
 
-        if st.button("2️⃣ Step 2: Monsoon Surge", use_container_width=True, help="Simulate sudden seasonal fever outbreak"):
+        if st.button("2️⃣ Monsoon Surge Outbreak", use_container_width=True, help="Simulate seasonal fever surge across districts"):
             st.session_state["scenario"] = "monsoon_surge"
             st.session_state["policy"] = "optimizer"
             st.session_state["day"] = 6
             st.query_params.update({"scenario": "monsoon_surge", "policy": "optimizer", "day": 6})
             st.rerun()
-        st.markdown("<div style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Look at: How the optimizer rapidly mobilizes antipyretics to affected taluks.</div>", unsafe_allow_html=True)
 
-        if st.button("3️⃣ Step 3: Compare Smart vs Do Nothing", use_container_width=True, help="Benchmark optimizer against zero transfer baseline"):
+        if st.button("3️⃣ Policy Comparison Benchmark", use_container_width=True, help="Benchmark Smart Plan against Do Nothing"):
             st.session_state["scenario"] = "monsoon_surge"
             st.session_state["policy"] = "optimizer"
+            st.query_params.update({"scenario": "monsoon_surge", "policy": "optimizer"})
             st.switch_page("pages/2_Scenario_Comparison.py")
-        st.markdown("<div style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Look at: Stockout days drop to zero under Smart plan vs heavy deficits in Do nothing.</div>", unsafe_allow_html=True)
 
-        if st.button("4️⃣ Step 4: Forecast Replay Audit", use_container_width=True, help="Verify demand forecast against real patient consumption"):
+        if st.button("4️⃣ Forecast Replay Audit", use_container_width=True, help="Inspect ML demand forecasts vs actual consumption"):
             st.session_state["scenario"] = "normal"
+            st.query_params.update({"scenario": "normal"})
             st.switch_page("pages/3_Replay.py")
-        st.markdown("<div style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Look at: How actual consumption closely tracks within the 95% forecast bands.</div>", unsafe_allow_html=True)
 
-        if st.button("5️⃣ Step 5: Model Evaluation Verdict", use_container_width=True, help="Review rigorous metrics, baselines, and ablation tests"):
+        if st.button("5️⃣ Model Evaluation", use_container_width=True, help="Review forecasting metrics, baselines, and ablation tests"):
             st.switch_page("pages/4_Model_Evaluation.py")
-        st.markdown("<div style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Look at: WAPE comparisons and the OPD ablation performance boost.</div>", unsafe_allow_html=True)
 
 
 def render_sidebar_filters(
@@ -128,7 +125,7 @@ def render_sidebar_filters(
         "Redistribution Policy",
         policy_display_options,
         index=pol_idx,
-        help=GLOSSARY["Smart plan"],
+        help=GLOSSARY.get("Smart plan", "Inter-hospital redistribution policy"),
     )
     selected_pol = LABEL_TO_POLICY.get(selected_pol_disp, "optimizer")
     st.session_state["policy"] = selected_pol
@@ -148,23 +145,27 @@ def render_sidebar_filters(
     )
     st.session_state["day"] = selected_day
 
-    # 5. District Filter
-    districts = ["All Districts"]
-    if not hospitals_df.empty and "district" in hospitals_df.columns:
-        districts += sorted(hospitals_df["district"].dropna().unique().tolist())
-    curr_dist = st.session_state.get("district", "All Districts")
-    dist_idx = districts.index(curr_dist) if curr_dist in districts else 0
-    selected_district = st.sidebar.selectbox("Filter District", districts, index=dist_idx)
-    st.session_state["district"] = selected_district
+    # 5. Advanced Filters Expander (District & Hospital Type)
+    has_active_advanced = (
+        st.session_state.get("district", "All Districts") != "All Districts"
+        or st.session_state.get("hospital_type", "All Facilities") != "All Facilities"
+    )
+    with st.sidebar.expander("⚙️ Advanced Filters", expanded=has_active_advanced):
+        districts = ["All Districts"]
+        if not hospitals_df.empty and "district" in hospitals_df.columns:
+            districts += sorted(hospitals_df["district"].dropna().unique().tolist())
+        curr_dist = st.session_state.get("district", "All Districts")
+        dist_idx = districts.index(curr_dist) if curr_dist in districts else 0
+        selected_district = st.selectbox("District", districts, index=dist_idx)
+        st.session_state["district"] = selected_district
 
-    # 6. Facility Type Filter
-    facility_types = ["All Facilities"]
-    if not hospitals_df.empty and "hospital_type" in hospitals_df.columns:
-        facility_types += sorted(hospitals_df["hospital_type"].dropna().unique().tolist())
-    curr_ht = st.session_state.get("hospital_type", "All Facilities")
-    ht_idx = facility_types.index(curr_ht) if curr_ht in facility_types else 0
-    selected_type = st.sidebar.selectbox("Filter Facility Type", facility_types, index=ht_idx)
-    st.session_state["hospital_type"] = selected_type
+        facility_types = ["All Facilities"]
+        if not hospitals_df.empty and "hospital_type" in hospitals_df.columns:
+            facility_types += sorted(hospitals_df["hospital_type"].dropna().unique().tolist())
+        curr_ht = st.session_state.get("hospital_type", "All Facilities")
+        ht_idx = facility_types.index(curr_ht) if curr_ht in facility_types else 0
+        selected_type = st.selectbox("Facility Type", facility_types, index=ht_idx)
+        st.session_state["hospital_type"] = selected_type
 
     # Sync query parameters for easy sharing
     st.query_params.update({
@@ -174,7 +175,7 @@ def render_sidebar_filters(
     })
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("Smart Medicine Redistribution System • Academic Implementation v4")
+    st.sidebar.caption("Smart Medicine Redistribution System • Health Logistics Command")
 
     return {
         "scenario": selected_sc,

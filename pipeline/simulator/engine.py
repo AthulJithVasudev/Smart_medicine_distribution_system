@@ -72,10 +72,19 @@ class Simulator:
         self.outbreak_multiplier = float(scenario_cfg.get("outbreak_multiplier", 1.0))
         self.is_monsoon = bool(scenario_cfg.get("is_monsoon", False))
         self.supplier_delay_days = int(scenario_cfg.get("supplier_delay_days", 0))
+        old_ratio = self.initial_stock_ratio
         self.initial_stock_ratio = float(scenario_cfg.get("initial_stock_ratio", 1.0))
         self.rural_transit_multiplier = float(scenario_cfg.get("rural_transit_multiplier", 1.0))
         window = scenario_cfg.get("outbreak_window", [0, 0])
         self.outbreak_window = (window[0], window[1]) if len(window) == 2 else (0, 0)
+
+        # Scale initial inventory if set_scenario modifies initial_stock_ratio on day 0
+        if self.current_day == 0 and self.initial_stock_ratio != old_ratio and old_ratio > 0:
+            factor = self.initial_stock_ratio / old_ratio
+            for b in self.batches.values():
+                new_q = max(1, int(round(b.initial_quantity * factor)))
+                b.initial_quantity = new_q
+                b.current_quantity = new_q
 
     def _init_network(self) -> None:
         """Generate hospital network and medicine catalog."""

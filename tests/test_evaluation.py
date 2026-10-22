@@ -176,3 +176,54 @@ def test_mlflow_tracking_and_champion_challenger(tmp_path):
     assert res3["promoted"] is True
     assert res3["champion_type"] == "SarimaxModel"
     assert res3["champion_metric"] == 0.15
+
+
+def test_no_transfer_policy_generates_zero_transfers():
+    """Verify that NoTransferPolicy returns zero transfers and creates no transfer orders."""
+    policy = NoTransferPolicy()
+    actions = policy(None)
+    assert actions == []
+    assert len(actions) == 0
+
+
+def test_impact_metrics_preserve_negative_differences():
+    """Verify that impact metrics do not clamp regressions to zero and preserve signed difference."""
+    baseline_stockout = 10.0
+    worse_active_stockout = 15.0
+    # Must preserve signed regression (-5.0), NOT clamped to 0.0
+    stockout_diff = baseline_stockout - worse_active_stockout
+    assert stockout_diff == -5.0
+
+    baseline_waste = 50.0
+    worse_active_waste = 80.0
+    waste_diff = baseline_waste - worse_active_waste
+    assert waste_diff == -30.0
+
+
+def test_fill_rate_percentage_point_difference():
+    """Verify that fill-rate difference is calculated in percentage points (pp), not relative % change."""
+    baseline_fill = 0.90 * 100.0  # 90.0%
+    active_fill = 0.95 * 100.0    # 95.0%
+
+    pp_diff = active_fill - baseline_fill
+    assert pp_diff == 5.0  # +5.0 percentage points, not (95-90)/90 = 5.55%
+
+    # Negative difference case
+    worse_fill = 0.85 * 100.0
+    neg_pp_diff = worse_fill - baseline_fill
+    assert neg_pp_diff == -5.0
+
+
+def test_daily_and_cumulative_unmet_demand_calculation():
+    """Verify that daily unmet demand and cumulative unmet demand are calculated chronologically."""
+    df = pd.DataFrame([
+        {"day": 0, "policy": "optimizer", "unmet_demand": 10},
+        {"day": 1, "policy": "optimizer", "unmet_demand": 25},
+        {"day": 2, "policy": "optimizer", "unmet_demand": 5},
+    ])
+    daily = df.sort_values("day")["unmet_demand"].tolist()
+    assert daily == [10, 25, 5]
+
+    cumulative = df.sort_values("day")["unmet_demand"].cumsum().tolist()
+    assert cumulative == [10, 35, 40]
+

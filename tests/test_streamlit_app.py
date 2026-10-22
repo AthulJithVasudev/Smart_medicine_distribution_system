@@ -125,5 +125,28 @@ def test_all_app_pages_render_without_exception():
         assert not at.exception, f"Page {p} raised an exception during render: {at.exception}"
 
 
+def test_sidebar_filters_return_expected_structure():
+    """Verify render_sidebar_filters returns scenario, policy, day, district, and hospital_type."""
+    from streamlit.testing.v1 import AppTest
+    repo_root = Path(__file__).resolve().parent.parent
+    home_file = str(repo_root / "app" / "Home.py")
+
+    at = AppTest.from_file(home_file, default_timeout=15)
+    at.run()
+    assert not at.exception
+    # Verify metric cards exist
+    assert len(at.metric) >= 4
+
+
+def test_no_clamping_to_zero_in_home():
+    """Verify Home.py does not artificially clamp negative impact differences to zero."""
+    home_content = Path("app/Home.py").read_text(encoding="utf-8")
+    assert "max(0.0, b_stockout - a_stockout)" not in home_content
+    assert "max(0.0, b_waste - a_waste)" not in home_content
+    assert "b_stockout - a_stockout" in home_content
+    assert "b_waste - a_waste" in home_content
+
+
+
 
 

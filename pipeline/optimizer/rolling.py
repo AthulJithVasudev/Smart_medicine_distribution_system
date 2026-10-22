@@ -22,17 +22,22 @@ class RollingHorizonOptimizer:
         self.safety_stock_days = safety_stock_days
         self.last_result: Optional[OptimizationResult] = None
 
-    def __call__(self, sim: Simulator) -> List[Dict[str, Any]]:
+    def __call__(
+        self,
+        sim: Simulator,
+        predicted_demand: Optional[Dict[Any, float]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Evaluate simulator state, execute OR-Tools solver, and return day's transfer actions.
         """
-        # Build demand forecast expectation per (hospital, medicine)
-        predicted_demand = {}
-        for h_id, hosp in sim.hospitals.items():
-            for m_id, med in sim.medicines.items():
-                # Base expected daily burn rate
-                rate = max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0)
-                predicted_demand[(h_id, m_id)] = rate
+        # Build demand forecast expectation per (hospital, medicine) if not provided
+        if not predicted_demand:
+            predicted_demand = {}
+            for h_id, hosp in sim.hospitals.items():
+                for m_id, med in sim.medicines.items():
+                    # Base expected daily burn rate
+                    rate = max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0)
+                    predicted_demand[(h_id, m_id)] = rate
 
         result = self.optimizer.solve(
             current_day=sim.current_day,
