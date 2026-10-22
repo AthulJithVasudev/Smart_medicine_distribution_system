@@ -89,7 +89,25 @@ def calculate_optimization_metrics(
 
     wastage_units = int(ground_truth_df["expired_units"].sum())
     unmet_demand = int(ground_truth_df["unmet_demand"].sum())
-    stockout_days = int((ground_truth_df["unmet_demand"] > 0).sum())
+
+    # Stockout definitions:
+    # 1. Item-facility occurrences (legacy name 'stockout_days' maintained for backwards compatibility)
+    stockout_events = int((ground_truth_df["unmet_demand"] > 0).sum())
+
+    # 2. Facility-days: unique (day, hospital) pairs experiencing stockout
+    # 3. Network stockout days: simulation days where any hospital experienced unmet demand
+    if "day" in ground_truth_df.columns:
+        if "hospital_id" in ground_truth_df.columns:
+            hosp_day_unmet = ground_truth_df.groupby(["day", "hospital_id"])["unmet_demand"].sum()
+            stockout_facility_days = int((hosp_day_unmet > 0).sum())
+        else:
+            stockout_facility_days = stockout_events
+        daily_unmet = ground_truth_df.groupby("day")["unmet_demand"].sum()
+        stockout_network_days = int((daily_unmet > 0).sum())
+    else:
+        stockout_facility_days = stockout_events
+        stockout_network_days = 1 if stockout_events > 0 else 0
+
     total_demand = int(ground_truth_df["true_demand"].sum())
     dispensed = int(ground_truth_df["dispensed_units"].sum())
     fill_rate = float(dispensed / max(1.0, float(total_demand)))
@@ -103,20 +121,29 @@ def calculate_optimization_metrics(
     else:
         wastage_rupees = wastage_units * 10.0
 
-    # Transport costs
+    # Transport costs and transfer volume
     transport_cost = 0.0
     transfers_count = 0
+    transfer_units = 0
     if transfers_df is not None and not transfers_df.empty:
         transfers_count = len(transfers_df)
         dist_sum = transfers_df["distance_km"].sum() if "distance_km" in transfers_df.columns else 0.0
         transport_cost = (transfers_count * fixed_transport_cost) + (dist_sum * cost_per_km)
+        transfer_units = int(transfers_df["quantity"].sum()) if "quantity" in transfers_df.columns else 0
 
     return {
         "wastage_units": wastage_units,
         "wastage_rupees": round(float(wastage_rupees), 2),
-        "stockout_days": stockout_days,
+        "stockout_days": stockout_events,
+        "stockout_facility_days": stockout_facility_days,
+        "stockout_network_days": stockout_network_days,
         "unmet_demand_units": unmet_demand,
+        "unmet_demand": unmet_demand,
+        "total_demand": total_demand,
+        "dispensed_units": dispensed,
         "fill_rate": round(fill_rate, 4),
         "transport_cost": round(float(transport_cost), 2),
         "transfers_count": transfers_count,
+        "num_transfers": transfers_count,
+        "transfer_units": transfer_units,
     }

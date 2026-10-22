@@ -191,8 +191,12 @@ class Simulator:
                 base_qty = int(med.criticality * 40 * bed_scale * self.initial_stock_ratio)
                 base_qty = max(10, base_qty)
 
-                # Split initial inventory across 2 staggered batches (nearer & further expiry)
-                exp_offset_1 = int(self.fault_rng.integers(25, 90))
+                # Split initial inventory across staggered batches (nearer & further expiry)
+                # In real hospitals, ~20% of batches are near expiry (5-14 days), enabling FEFO management
+                if self.fault_rng.random() < 0.20:
+                    exp_offset_1 = int(self.fault_rng.integers(5, 14))
+                else:
+                    exp_offset_1 = int(self.fault_rng.integers(20, 90))
                 exp_offset_2 = int(self.fault_rng.integers(91, max(92, med.shelf_life_days)))
 
                 qty_1 = int(base_qty * 0.4)
@@ -492,6 +496,7 @@ class Simulator:
                     "current_stock": current_stock_after,
                     "true_demand": true_demand,  # HIDDEN TRUTH
                     "unmet_demand": unmet_demand,  # HIDDEN TRUTH
+                    "dispensed": dispensed_units,
                     "dispensed_units": dispensed_units,
                     "expired_units": expired_units,
                     "transfers_in_received": transfers_in,

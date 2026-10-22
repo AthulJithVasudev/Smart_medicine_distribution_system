@@ -29,6 +29,7 @@ class OptimizationResult:
     transfers: List[TransferRecommendation]
     unmet_shortages: Dict[Tuple[str, str], int]
     solved: bool
+    message: str = ""
 
 
 class RedistributionOptimizer:
@@ -62,10 +63,16 @@ class RedistributionOptimizer:
         batches: Dict[str, Batch],
         predicted_demand: Dict[Tuple[str, str], float],
         safety_stock_days: int = 5,
+        in_transit_incoming: Optional[Dict[Tuple[str, str], int]] = None,
+        rural_transit_multiplier: float = 1.0,
     ) -> OptimizationResult:
         """
         Formulate and solve the redistribution ILP for the current day across the hospital network.
+        Accounts for pipeline inventory (in-transit transfers) and rural transit conditions.
         """
+        if in_transit_incoming is None:
+            in_transit_incoming = {}
+
         solver = pywraplp.Solver.CreateSolver("CBC")
         if not solver:
             # Fallback to SCIP or GLOP if CBC is not compiled
@@ -86,19 +93,23 @@ class RedistributionOptimizer:
                     if b.hospital_id == h_id and b.medicine_id == m_id and b.is_valid and b.expiry_day > current_day
                 ]
                 current_stock = sum(b.current_quantity for b in active_batches)
+                incoming = in_transit_incoming.get(key, 0)
+                inventory_pos = current_stock + incoming
 
-                est_daily = predicted_demand.get(key, max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0))
-                # Horizon demand and safety stock
-                horizon_demand = int(est_daily * min(self.horizon_days, 7))
-                safety_stock = int(est_daily * safety_stock_days)
+                est_daily = max(0.5, predicted_demand.get(key, max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0)))
+                # Reorder threshold: only trigger deficit if inventory position drops below safety stock buffer
+                reorder_threshold = int(est_daily * safety_stock_days)
+                target_stock = int(est_daily * (safety_stock_days + min(self.horizon_days, 3)))
 
-                # Availability = surplus stock above horizon demand + safety
-                surplus = max(0, current_stock - horizon_demand - safety_stock)
-                avail[key] = surplus
+                # Need accounts for in-transit arrivals (prevents bullwhip duplicate orders)
+                if inventory_pos < reorder_threshold:
+                    need[key] = max(0, target_stock - inventory_pos)
+                else:
+                    need[key] = 0
 
-                # Need = shortfall below horizon demand + safety
-                deficit = max(0, horizon_demand + safety_stock - current_stock)
-                need[key] = deficit
+                # Availability = surplus stock strictly above local consumption + safety buffer
+                min_reserve = int(est_daily * (safety_stock_days + min(self.horizon_days, 7)))
+                avail[key] = max(0, current_stock - min_reserve)
 
         # 1b. Precalculate expected local consumption under FEFO to identify at-risk expiring batches
         at_risk_units: Dict[str, int] = {}
@@ -158,7 +169,10 @@ class RedistributionOptimizer:
                     continue
 
                 dist_km = src_hosp.distance_to(dst_hosp)
-                transit_days = max(1, int(math.ceil(dist_km / 120.0)))
+                base_transit = max(1, int(math.ceil(dist_km / 120.0)))
+                if src_hosp.is_rural or dst_hosp.is_rural:
+                    base_transit = int(math.ceil(base_transit * rural_transit_multiplier))
+                transit_days = max(1, base_transit)
                 # Timing feasibility: cannot ship if transit exceeds horizon
                 if transit_days > self.horizon_days:
                     continue
@@ -275,7 +289,10 @@ class RedistributionOptimizer:
             qty = int(round(x_var.solution_value()))
             if qty > 0:
                 dist = hospitals[si].distance_to(hospitals[dj])
-                trans_days = max(1, int(math.ceil(dist / 120.0)))
+                base_transit = max(1, int(math.ceil(dist / 120.0)))
+                if hospitals[si].is_rural or hospitals[dj].is_rural:
+                    base_transit = int(math.ceil(base_transit * rural_transit_multiplier))
+                trans_days = max(1, base_transit)
                 cost = self.fixed_transport_cost + (self.cost_per_km * dist)
                 recommendations.append(TransferRecommendation(
                     from_hospital=si,

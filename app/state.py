@@ -175,6 +175,10 @@ def render_sidebar_filters(
     })
 
     st.sidebar.markdown("---")
+    if st.sidebar.button("🔄 Reload / Refresh Cache", use_container_width=True, help="Invalidate cached data and reload fresh tables from disk"):
+        from app.data_loader import clear_data_cache
+        clear_data_cache()
+        st.rerun()
     st.sidebar.caption("Smart Medicine Redistribution System • Health Logistics Command")
 
     return {

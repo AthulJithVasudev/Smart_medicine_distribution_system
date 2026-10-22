@@ -73,7 +73,12 @@ def execute_closed_loop_run(
                 hospitals_map=sim.hospitals,
                 medicines_map=sim.medicines,
             )
-            latest_curated = curated_daily[curated_daily["report_day"] == curated_daily["report_day"].max()].copy()
+            # Latest available report per hospital and medicine (respecting delayed reporting)
+            latest_curated = (
+                curated_daily.sort_values("report_day")
+                .groupby(["hospital_id", "medicine_id"], as_index=False)
+                .last()
+            )
             if not latest_curated.empty:
                 pred_df = trained_forecaster.predict(latest_curated)
                 for _, pr in pred_df.iterrows():
@@ -139,8 +144,25 @@ def execute_closed_loop_run(
             kpi_records.append(day_metrics)
 
     # 4. Overall run KPIs
-    full_gt = sim.get_hidden_ground_truth()
-    full_transfers = sim.get_transfers_log()
+    full_gt = sim.get_hidden_ground_truth().copy()
+    full_transfers = sim.get_transfers_log().copy()
+
+    if not full_transfers.empty:
+        full_transfers["scenario"] = scenario_cfg["name"]
+        full_transfers["policy"] = policy_name
+        full_transfers["seed"] = seed
+    else:
+        full_transfers = pd.DataFrame(columns=[
+            "day", "order_id", "from_hospital", "to_hospital",
+            "medicine_id", "quantity", "transit_days", "arrival_day", "distance_km",
+            "scenario", "policy", "seed"
+        ])
+
+    if not full_gt.empty:
+        full_gt["scenario"] = scenario_cfg["name"]
+        full_gt["policy"] = policy_name
+        full_gt["seed"] = seed
+
     overall_kpis = calculate_optimization_metrics(
         full_gt,
         full_transfers,
@@ -240,6 +262,11 @@ def run_scenario_matrix(
                 "stockout_days_std": round(float(kpi_df["stockout_days"].std()), 2) if seeds > 1 else 0.0,
                 "fill_rate_mean": round(float(kpi_df["fill_rate"].mean()), 4),
                 "fill_rate_std": round(float(kpi_df["fill_rate"].std()), 4) if seeds > 1 else 0.0,
+                "unmet_demand_mean": round(float(kpi_df["unmet_demand"].mean()), 2) if "unmet_demand" in kpi_df.columns else 0.0,
+                "unmet_demand_std": round(float(kpi_df["unmet_demand"].std()), 2) if (seeds > 1 and "unmet_demand" in kpi_df.columns) else 0.0,
+                "transfer_units_mean": round(float(kpi_df["transfer_units"].mean()), 2) if "transfer_units" in kpi_df.columns else 0.0,
+                "transfer_units_std": round(float(kpi_df["transfer_units"].std()), 2) if (seeds > 1 and "transfer_units" in kpi_df.columns) else 0.0,
+                "num_transfers_mean": round(float(kpi_df["num_transfers"].mean()), 2) if "num_transfers" in kpi_df.columns else 0.0,
                 "transport_cost_mean": round(float(kpi_df["transport_cost"].mean()), 2),
                 "transport_cost_std": round(float(kpi_df["transport_cost"].std()), 2) if seeds > 1 else 0.0,
             }
@@ -249,6 +276,7 @@ def run_scenario_matrix(
     replay_concat = pd.concat(all_replay, ignore_index=True) if all_replay else pd.DataFrame()
     transfers_concat = pd.concat(all_transfers, ignore_index=True) if all_transfers else pd.DataFrame()
     daily_kpis_concat = pd.concat(all_daily_kpis, ignore_index=True) if all_daily_kpis else pd.DataFrame()
+    daily_states_concat = pd.concat(all_daily_states, ignore_index=True) if all_daily_states else pd.DataFrame()
 
     # Save outputs to Parquet
     matrix_dir = out_dir / "matrix"
@@ -257,6 +285,7 @@ def run_scenario_matrix(
     replay_concat.to_parquet(matrix_dir / "replay.parquet", index=False)
     transfers_concat.to_parquet(matrix_dir / "transfers.parquet", index=False)
     daily_kpis_concat.to_parquet(matrix_dir / "daily_kpis.parquet", index=False)
+    daily_states_concat.to_parquet(matrix_dir / "state_daily.parquet", index=False)
 
     logger.info("Scenario matrix completed successfully.")
     return {

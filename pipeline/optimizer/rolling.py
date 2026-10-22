@@ -39,6 +39,12 @@ class RollingHorizonOptimizer:
                     rate = max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0)
                     predicted_demand[(h_id, m_id)] = rate
 
+        # Extract in-transit pipeline stock arriving at destinations from inter-hospital transfers
+        in_transit: Dict[Any, int] = {}
+        for tr in getattr(sim, "pending_transfers", []):
+            k = (tr.to_hospital_id, tr.medicine_id)
+            in_transit[k] = in_transit.get(k, 0) + tr.quantity
+
         result = self.optimizer.solve(
             current_day=sim.current_day,
             hospitals=sim.hospitals,
@@ -46,6 +52,8 @@ class RollingHorizonOptimizer:
             batches=sim.batches,
             predicted_demand=predicted_demand,
             safety_stock_days=self.safety_stock_days,
+            in_transit_incoming=in_transit,
+            rural_transit_multiplier=getattr(sim, "rural_transit_multiplier", 1.0),
         )
         self.last_result = result
 

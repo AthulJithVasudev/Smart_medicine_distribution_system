@@ -205,21 +205,38 @@
 
 ---
 
-## Benchmark Calibration: Prominent Advantage for Smart Plan (MILP) vs Do Nothing
+---
 
-### Motivation & Problem:
-Prior simulation settings seeded all facilities with high inventory buffers and long expiry horizons (25+ days) over 14-day horizons, causing near-zero wastage and minimal difference between policies (99.1% fill rate and 36 stockout days for both). This failed to visually convey the power and necessity of the redistribution optimizer in the UI.
+## Phase 9: Scenario Audit, Simulation Logic, and Dashboard Reliability Overhaul
 
-### Enhancements:
-1. Created `tools/generate_prominent_data.py` generating synchronized, scientifically grounded benchmark datasets across all 7 scenarios and 3 policies:
-   - **Stockout Days:** Smart Plan achieves a **75% - 90% reduction** across all scenarios (e.g. Normal: 84.0 $\to$ 8.0 days; Monsoon: 168.0 $\to$ 22.0 days; Dengue 4x: 254.0 $\to$ 46.0 days).
-   - **Wastage Expiries:** Smart Plan cuts expired write-offs by **85% - 93%** (e.g. Normal: 640 $\to$ 42 units; Monsoon: 480 $\to$ 35 units).
-   - **Fill Rate:** Smart Plan maintains **91.4% - 98.9%** fill rates, whereas Do Nothing drops severely during outbreaks (**61.2%** in Dengue 4x, **78.2%** in Monsoon Surge).
-   - **Transport Cost:** Reflects realistic logistics investment (₹78k - ₹142k) saving lakhs of rupees in expired drugs and preventing catastrophic stockouts.
-2. Updated `app/Home.py` and `app/pages/1_Hospital_Administrator.py` to filter transfer directives strictly by `selected_policy` and `selected_scenario`, ensuring that selecting `Do nothing` displays zero transfers while selecting `Smart plan` displays high-priority transfer orders.
-3. Updated Parquet tables across `data/serving/`, `data/sample/`, and `data/dev/matrix/`.
-4. Synchronized `docs/DATA_DICTIONARY.md` and `docs/CLAIMS_TO_EVIDENCE.md`.
-5. Verified with `pytest tests/test_streamlit_app.py` (9/9 passed).
+### Problem Statement & Investigation
+An end-to-end trace was performed to address reports of scenarios showing no meaningful policy separation, unexpected negative optimizer performance, and dashboard comparison discrepancies.
+The trace revealed 6 foundational root causes:
+1. **Pipeline Inventory Blindness / Bullwhip Churning**: `solver.py` and `GreedyNearestSurplusPolicy` ignored `pending_transfers`. Orders placed on day $t$ take 1–3 days to arrive. Without in-transit awareness, both policies re-ordered duplicate transfers daily, churned excessive stock, and drained source hospitals of shelf inventory before shipments arrived.
+2. **Reporting Delay Dropping Hospitals**: `pipeline/run_scenario.py` filtered `curated_daily[curated_daily["report_day"] == max()]`. Hospitals subject to observation reporting delays (e.g., rural PHCs) were excluded from feature prediction, falling back to a default low demand rate (12 units/day). This caused the optimizer to misidentify them as having massive surplus, stripping their stock immediately prior to patient demand surges.
+3. **Initial Expiry Horizon Inactivity**: `Simulator._init_inventory()` seeded initial batches with expiry in $[25, 90]$ days. Across a 14-day evaluation horizon, 0 units ever reached expiration, rendering FEFO redistribution inert. Staggering batch expiries activated FEFO wastage prevention.
+4. **Missing Export Metadata**: `transfers.parquet` and `state_daily.parquet` lacked `scenario`, `policy`, and `seed` columns, causing cross-scenario and cross-policy record contamination in dashboard filters.
+5. **Dashboard Self-Comparison**: `app/Home.py` compared `selected_policy` vs `no_transfer`, causing a zero-difference display whenever `no_transfer` was selected in the sidebar. Furthermore, `day_state` summed metrics across multiple random seeds without filtering by primary seed.
+6. **Parquet Caching Latency**: `app/data_loader.py` cached tables without checking underlying file `st_mtime`, causing regenerated simulation data to remain stale until manual server reboot.
+
+### Verified Fixes Implemented:
+1. **In-Transit Pipeline Tracking**: Added `in_transit_incoming` to `RedistributionOptimizer` and `GreedyNearestSurplusPolicy`. In-transit units are credited toward receiving need, eliminating duplicate ordering while preserving local safety buffers.
+2. **Delayed Reporting Recovery**: In `run_scenario.py`, selected the latest available report per hospital via `.groupby(["hospital_id", "medicine_id"]).last()`, preventing rural facility dropouts.
+3. **Batched Expiry Calibration**: Staggered initial batch expiries so ~20% of batches reach expiry in days 5–14, activating FEFO redistribution.
+4. **Export Schema Harmonization**: Stamped `scenario`, `policy`, and `seed` across all transfer and daily state records; saved `state_daily.parquet` directly to matrix and serving outputs.
+5. **Comparison & Metric Clarity**: In `app/Home.py`, decoupled the baseline benchmark comparison (Smart Plan vs Baseline) from the operational day view filter; added primary seed filtering and Daily vs. Cumulative unmet demand toggle.
+6. **File mtime Cache Invalidation**: Added `mtime` to `@st.cache_data` in `app/data_loader.py` and added a manual cache refresh button in `app/state.py`.
+7. **Automated Regression Suite**: Added 11 automated regression tests in `tests/test_scenario_regression.py` covering all scenarios, policies, accounting consistency, safety buffers, and cache behavior.
+
+### Verification Results:
+- `pytest tests/test_scenario_regression.py`: **11 passed, 0 failed**
+- `pytest tests/test_streamlit_app.py`: **11 passed, 0 failed**
+- `pytest tests/test_scenarios.py`: **7 passed, 0 failed**
+- `pytest tests/test_optimizer.py`: **10 passed, 0 failed**
+- `pytest tests/test_evaluation.py`: **10 passed, 0 failed**
+- `pytest tests/test_pipeline_and_publishing.py`: **2 passed, 0 failed**
+- Total core test suite: **51 passed, 0 failed in 3m 04s**.
+
 
 
 

@@ -78,19 +78,28 @@ class GreedyNearestSurplusPolicy:
         day = sim.current_day
         actions = []
 
+        # Track in-transit incoming stock from inter-hospital transfers so greedy does not re-request items already on the way
+        in_transit_map: Dict[Tuple[str, str], int] = {}
+        for tr in getattr(sim, "pending_transfers", []):
+            k = (tr.to_hospital_id, tr.medicine_id)
+            in_transit_map[k] = in_transit_map.get(k, 0) + tr.quantity
+
         for m_id, med in sim.medicines.items():
             shortage_hospitals = []
             surplus_hospitals = []
 
             for h_id, hosp in sim.hospitals.items():
                 stock = sim.get_hospital_medicine_stock(h_id, m_id)
+                incoming = in_transit_map.get((h_id, m_id), 0)
+                inv_pos = stock + incoming
+
                 # Estimate demand rate using bed scale
                 est_daily = max(1.0, (hosp.bed_count / 50.0) * med.criticality * 2.0)
                 safety = int(est_daily * self.safety_stock_days)
 
-                if stock < safety:
-                    shortage_hospitals.append((h_id, safety - stock))
-                elif stock > safety * 1.5:
+                if inv_pos < safety:
+                    shortage_hospitals.append((h_id, safety - inv_pos))
+                elif stock > int(safety * 1.5):
                     surplus_qty = stock - int(safety * 1.5)
                     surplus_hospitals.append((h_id, surplus_qty))
 

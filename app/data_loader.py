@@ -44,20 +44,26 @@ def _resolve_table_path(table_name: str) -> Optional[Path]:
     return None
 
 
-@st.cache_data(ttl=300)
-def load_serving_table(
-    table_name: str,
-    columns: Optional[List[str]] = None,
-    where_clause: Optional[str] = None,
-) -> pd.DataFrame:
-    """
-    Load a table using DuckDB over Parquet with column projection and filtering.
-    Falls back gracefully to empty DataFrame if file is missing.
-    """
-    p = _resolve_table_path(table_name)
-    if p is None or not p.exists():
-        return pd.DataFrame()
+def _get_file_mtime(p: Optional[Path]) -> float:
+    if p is not None and p.exists():
+        try:
+            return p.stat().st_mtime
+        except Exception:
+            return 0.0
+    return 0.0
 
+
+@st.cache_data(ttl=300)
+def _load_cached_table(
+    table_path_str: str,
+    columns_tuple: Optional[tuple],
+    where_clause: Optional[str],
+    mtime: float,
+) -> pd.DataFrame:
+    p = Path(table_path_str)
+    if not p.exists():
+        return pd.DataFrame()
+    columns = list(columns_tuple) if columns_tuple else None
     try:
         # Use forward slashes for DuckDB read_parquet path on Windows
         posix_path = p.as_posix()
@@ -79,7 +85,30 @@ def load_serving_table(
             return pd.DataFrame()
 
 
-@st.cache_data(ttl=300)
+def load_serving_table(
+    table_name: str,
+    columns: Optional[List[str]] = None,
+    where_clause: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Load a table using DuckDB over Parquet with column projection and filtering.
+    Falls back gracefully to empty DataFrame if file is missing.
+    Automatically invalidates cache when the underlying file on disk is modified.
+    """
+    p = _resolve_table_path(table_name)
+    if p is None or not p.exists():
+        return pd.DataFrame()
+
+    mtime = _get_file_mtime(p)
+    cols_tup = tuple(columns) if columns else None
+    return _load_cached_table(str(p), cols_tup, where_clause, mtime)
+
+
+def clear_data_cache() -> None:
+    """Explicitly clear Streamlit data cache."""
+    st.cache_data.clear()
+
+
 def load_all_dashboard_data() -> Dict[str, pd.DataFrame]:
     """Load all 12 published serving tables."""
     table_names = [

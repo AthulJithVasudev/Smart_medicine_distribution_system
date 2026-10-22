@@ -87,8 +87,14 @@ def export_serving_data(profile: str = "dev", target_dir: str = "data/serving") 
         replay_df = pd.DataFrame()
     replay_df.to_parquet(serving_path / "replay.parquet", index=False)
 
-    # Daily state: extract from replay or raw curated
-    if not replay_df.empty:
+    # Daily state: extract from matrix/state_daily.parquet or replay
+    if (matrix_dir / "state_daily.parquet").exists():
+        state_daily_df = pd.read_parquet(matrix_dir / "state_daily.parquet")
+        if "true_demand" in state_daily_df.columns and "actual_demand" not in state_daily_df.columns:
+            state_daily_df["actual_demand"] = state_daily_df["true_demand"]
+        if "current_stock" in state_daily_df.columns and "stock_remaining" not in state_daily_df.columns:
+            state_daily_df["stock_remaining"] = state_daily_df["current_stock"]
+    elif not replay_df.empty:
         state_daily_df = replay_df[[
             "scenario", "policy", "seed", "day", "hospital_id", "medicine_id",
             "stock_remaining", "actual_demand", "unmet_demand", "expired_units"
